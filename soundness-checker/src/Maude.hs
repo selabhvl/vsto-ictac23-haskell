@@ -8,19 +8,47 @@
 module Maude where
 
 import Control.Lens
+import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
-import Types
+import Data.Maybe
+import Types (FeatureID, GroupID, FeatureType(..), GroupType(..), Name)
+
+data Feature = F
+  { _name :: Name
+  , _parentID :: FeatureID
+  , _featureType :: FeatureType
+  , _childGroups :: [Group]
+  }
+  deriving (Show, Eq)
+
+data Group = Group
+  { _groupID :: GroupID
+  , _groupType :: GroupType
+  , _childFeatures :: [FeatureID]
+  }
+  deriving (Show, Eq)
 
 type FT = M.Map FeatureID Feature
 data FM = FM FeatureID FT
   deriving (Show, Eq)
 
-makeFieldsNoPrefix ''FM
+makeFieldsNoPrefix ''Feature
+makeFieldsNoPrefix ''Group
+
+isWellFormed :: FT -> FeatureID -> Bool
+isWellFormed ft fid = all isWellFormed' (M.assocs ft)
+  where
+     isWellFormed' (k,f) = fid == k --> not ( (_featureType f) == Mandatory && all (((==) And) . _groupType) (gs f))
+     gs f = maybe [] (\pf -> filter (\g -> fid `elem` (_childFeatures g)) $ _childGroups pf) $ M.lookup (_parentID f) ft
 
 addFeature :: FM -> (FeatureID, Name, GroupID, FeatureType) -> FM
 addFeature (FM rfid ft) (newFid, newName, targetGroup, fType)
- | notExists newFid ft && isUniqueName newName (((map snd) . M.toList) ft) = FM rfid (addFeatureToGroup ft targetGroup newFid)
+ | notExists newFid ft && isUniqueName newName ft && isWellFormed ft'' newFid = FM rfid ft''
  | otherwise   = error "Not allowed"
+ where
+   ft' = addFeatureToGroup ft targetGroup newFid
+   parentFid = parentOfGroup ft targetGroup
+   ft'' = M.insert newFid (F {_parentID = parentFid, _name = newName, _featureType = fType, _childGroups=[] }) ft'
 
 notExists :: FeatureID -> FT -> Bool
 notExists fid ft = M.notMember fid ft
@@ -28,18 +56,13 @@ notExists fid ft = M.notMember fid ft
 mkGroupMap :: [Group] -> M.Map GroupID Group
 mkGroupMap = M.fromList . (map (\x -> (_groupID x,x)))
 
-mkFeatureMap :: [Feature] -> FT
-mkFeatureMap = M.fromList . (map (\x -> (_featureID x,x)))
-
-isUniqueName :: Name -> [Feature] -> Bool
-isUniqueName n ft = all (\f -> all (\g -> isUniqueName n (_childFeatures g))
-                                   (_childGroups f)) ft
+isUniqueName :: Name -> FT -> Bool
+isUniqueName n ft = all (\f -> _name f /= n) (M.elems ft)
 
 addFeatureToGroup :: FT -> GroupID -> FeatureID -> FT
-addFeatureToGroup ft targetGroup newFid = M.map (\f -> updateF f (_childGroups) (map (addFeatureToGroup_g targetGroup newFid) (_childGroups f))) ft
+addFeatureToGroup ft targetGroup newFid = M.adjust (over childGroups (map (\g -> if targetGroup == _groupID g then over (childFeatures) (newFid :) g else g))) parentID ft
+  where
+    parentID = parentOfGroup ft targetGroup
 
-addFeatureToGroup_g :: GroupID -> FeatureID -> Group -> Group
-addFeatureToGroup_g gid fid g
- | (_groupID g) == gid = over (childFeatures) (\ fs -> (Feature { _featureID = fid}):fs) g -- incomplete
- 
-updateF f sel func = error "NYI"
+parentOfGroup :: FT -> GroupID -> FeatureID
+parentOfGroup ft gid = fromJust $ M.foldrWithKey (\k f acc -> if gid `elem` map _groupID (_childGroups f) then Just k else acc) Nothing ft
