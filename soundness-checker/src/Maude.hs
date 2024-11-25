@@ -12,6 +12,7 @@ import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
 import Data.Maybe
 import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name)
+import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
 
 data Feature = F
   { _name :: Name
@@ -85,6 +86,29 @@ parentGroup ft fid = not . null $ M.foldr (\f acc -> acc ++ filter (\g -> fid `e
 removeFeatureFromParent :: FT -> FeatureID -> FeatureID -> FT
 removeFeatureFromParent ft parentFid fid = M.adjust (over childGroups (\gs -> map (over childFeatures (filter (\f ->f /= fid))) gs)) parentFid ft
 
+-- Rule moveFeature
+moveFeature :: FM -> (FeatureID, GroupID) -> FM
+moveFeature (FM rfid ft) (fid, newGroup)
+  | rfid /= fid && not (isSubFeature fid newParent rfid ft) && gid = FM rfid ft''''
+  | otherwise = error "moveFeature"
+  where
+    f = fromJust $ M.lookup fid ft
+    parentFid = _parentID f
+    ft' = M.delete fid ft
+    newParent = parentOfGroup ft newGroup
+    ft'' = removeFeatureFromParent ft' parentFid fid
+    ft''' = addFeatureToGroup ft'' newGroup fid
+    ft'''' = M.insert fid (over parentID (\_ -> newParent) f) ft''' -- could be M.adjust.
+    gid = parentGroup ft fid
+
+isSubFeature :: FeatureID -> FeatureID -> FeatureID -> FT -> Bool
+isSubFeature fid parentFid rfid ft
+  | parentFid == rfid = False
+  | fid == parentFid = fid /= rfid -- 2 in 1
+  | otherwise = isSubFeature fid (_parentID f) rfid ft -- careful!
+  where
+    f = fromJust $ M.lookup parentFid ft
+
 ----- Some Tests
 -- Try:
 -- $ stack repl
@@ -96,7 +120,13 @@ test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = me, _featur
   where
     me = FeatureID "fid 1"
 
-test_plan1 :: [FM -> FM]
-test_plan1 = [\m -> removeFeature m (FeatureID "fid 1")]
+-- We're reusing the operations from Ida's code here, but of course TPs and intervals are ignored.
+test_plan1 :: [UpdateOperation]
+test_plan1 = [ChangeOperation (TP 0) (RemoveFeature (FeatureID "fid 1"))]
 
-test_exe1 = foldl (\m op -> op m) test_fm1 test_plan1
+mkOp :: UpdateOperation -> (FM -> FM)
+mkOp (ChangeOperation (TP 0) (RemoveFeature fid)) = \m -> removeFeature m fid
+mkOp (AddOperation _ (AddFeature fid name fType gid)) = \m -> addFeature m (fid,name,gid,fType)
+mkOp _ = error "Op NYI or TP-error (must be 0)!"
+
+test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
