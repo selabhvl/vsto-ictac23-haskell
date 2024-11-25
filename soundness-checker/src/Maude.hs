@@ -125,6 +125,13 @@ changeFeatureVariationType (FM rfid ft) (fid, ftype')
 
 
 -- Rule addGroup
+addGroup :: FM -> (FeatureID, GroupID, GroupType) -> FM
+addGroup (FM rfid ft) (fid, gid, gtype)
+  | isJust fj && isUniqueGroupID gid ft -- Maude seems fishy here, reduntant update of FT?
+    = FM rfit $ M.adjust (over childGroups ((Group {_groupID = gid, _groupType = gtype, _childFeatures= []}):)) fid ft
+  where
+    fj = M.lookup fid ft
+    
 -- Rule removeGroup
 -- Rule changeGroupVariationType
 -- Rule moveGroup
