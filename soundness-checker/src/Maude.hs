@@ -109,6 +109,26 @@ isSubFeature fid parentFid rfid ft
   where
     f = fromJust $ M.lookup parentFid ft
 
+-- Rule renameFeature
+renameFeature :: FM -> (FeatureID, Name) -> FM
+renameFeature (FM rfid ft) (fid, newName)
+  | isUniqueName newName ft = FM rfid $ M.adjust (over name (const newName)) fid ft -- minor departure from Maude
+  | otherwise = error "renameFeature"
+
+-- Rule changeFeatureVariationType
+changeFeatureVariationType :: FM -> (FeatureID, FeatureType) -> FM
+changeFeatureVariationType (FM rfid ft) (fid, ftype')
+  | fid /= rfid && isWellFormed ft'' fid = FM rfid ft''
+  | otherwise = error "cfvt"
+  where
+    ft'' = M.adjust (over featureType (const ftype')) fid ft
+
+
+-- Rule addGroup
+-- Rule removeGroup
+-- Rule changeGroupVariationType
+-- Rule moveGroup
+
 ----- Some Tests
 -- Try:
 -- $ stack repl
