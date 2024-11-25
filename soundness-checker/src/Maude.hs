@@ -10,7 +10,9 @@ module Maude where
 import Control.Lens
 import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
+import Data.List
 import Data.Maybe
+import Data.Tuple.Utils
 import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
 
@@ -128,12 +130,40 @@ changeFeatureVariationType (FM rfid ft) (fid, ftype')
 addGroup :: FM -> (FeatureID, GroupID, GroupType) -> FM
 addGroup (FM rfid ft) (fid, gid, gtype)
   | isJust fj && isUniqueGroupID gid ft -- Maude seems fishy here, reduntant update of FT?
-    = FM rfit $ M.adjust (over childGroups ((Group {_groupID = gid, _groupType = gtype, _childFeatures= []}):)) fid ft
+    = FM rfid $ M.adjust (over childGroups ((Group {_groupID = gid, _groupType = gtype, _childFeatures= []}):)) fid ft
+  | otherwise = error "addGroup"
   where
     fj = M.lookup fid ft
-    
+
+isUniqueGroupID :: GroupID -> FT -> Bool
+isUniqueGroupID gid ft = and . M.elems $ M.map (\f -> all (\g -> gid /= _groupID g) (_childGroups f)) ft
+
 -- Rule removeGroup
+removeGroup :: FM -> GroupID -> FM
+removeGroup (FM rfid ft) gid
+  | isJust fidj && (null . _childFeatures . snd3 . fromJust) fidj = FM rfid $ M.adjust (over childGroups (const gs)) fid ft
+  | otherwise = error "removeGroup"
+  where
+     fidj = M.foldrWithKey (\fk f acc -> let (g,gs) = partition (\gx -> _groupID gx == gid) (_childGroups f) in if (not . null) g then Just (fk, head g, gs) else acc) Nothing ft
+     fid  = fst3 . fromJust $ fidj
+     gs   = thd3 . fromJust $ fidj
+
 -- Rule changeGroupVariationType
+changeGroupVariationType :: FM -> (GroupID, GroupType) -> FM
+changeGroupVariationType (FM rfid ft) (gid, gtype)
+  | isJust fidj && allWellFormed fs ft'' = FM rfid ft''
+  | otherwise = error "cgvt"
+  where
+     fidj = M.foldrWithKey (\fk f acc -> let (g,gs) = partition (\gx -> _groupID gx == gid) (_childGroups f) in if (not . null) g then Just (fk, head g, gs) else acc) Nothing ft
+     parentFid = fst3 . fromJust $ fidj
+     gs   = thd3 . fromJust $ fidj
+     fs   = _childFeatures . snd3 . fromJust $ fidj
+     -- couldn't be bothered to do the 2nd `over`
+     ft'' = M.adjust (over childGroups (const (Group {_groupID=gid, _groupType=gtype, _childFeatures = _childFeatures . snd3 . fromJust $ fidj} : gs))) parentFid ft
+
+allWellFormed :: [FeatureID] -> FT -> Bool
+allWellFormed fids ft = all (\f -> isWellFormed ft f) fids
+
 -- Rule moveGroup
 
 ----- Some Tests
@@ -157,3 +187,7 @@ mkOp (AddOperation _ (AddFeature fid name fType gid)) = \m -> addFeature m (fid,
 mkOp _ = error "Op NYI or TP-error (must be 0)!"
 
 test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
+
+
+-- TODOs:
+-- over .. (const foo) is probably a pattern.
