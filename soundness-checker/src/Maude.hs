@@ -165,6 +165,24 @@ allWellFormed :: [FeatureID] -> FT -> Bool
 allWellFormed fids ft = all (\f -> isWellFormed ft f) fids
 
 -- Rule moveGroup
+moveGroup :: FM -> (GroupID, FeatureID) -> FM
+moveGroup (FM rfid ft) (gid, newParent)
+  | allNotSubFeature fs newParent rfid ft = error "NYI"
+  | otherwise = error "moveGroup"
+  where
+    fnewj = M.lookup newParent ft
+    f = fromJust fnewj
+    ft' = M.delete newParent ft -- let's stick to Maude here
+    oldParentj = M.foldrWithKey (\fk f acc -> let (g,gs) = partition (\gx -> _groupID gx == gid) (_childGroups f) in if (not . null) g then Just ((fk,f), head g, gs) else acc) Nothing ft'
+    oldParent = fst . fst3 . fromJust $ oldParentJ
+    oldParentf = snd . fst3 . fromJust $ oldParentJ
+    gs' = thd3 . fromJust $ oldParentJ
+    g = snd3 . fromJust $ oldParentJ
+    ft'' = M.delete oldParent ft'
+    ft''' = M.insert newParent (over childGroups (g:)) $ M.insert oldParent (over childGroups (const gs')) ft
+
+allNotSubFeatures :: [FeatureID] -> FeatureID -> FeatureID -> FT -> Bool
+allNotSubFeature fs fid rfid ft = all (\f -> not $ isSubFeature f fid rfid ft) fs
 
 ----- Some Tests
 -- Try:
