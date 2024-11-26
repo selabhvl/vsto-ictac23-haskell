@@ -13,7 +13,7 @@ import qualified Data.Map as M
 import Data.List
 import Data.Maybe
 import Data.Tuple.Utils
-import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name)
+import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
 
 data Feature = F
@@ -187,10 +187,11 @@ allNotSubFeature :: [FeatureID] -> FeatureID -> FeatureID -> FT -> Bool
 allNotSubFeature fs fid rfid ft = all (\f -> not $ isSubFeature f fid rfid ft) fs
 
 updateParents :: FT -> [FeatureID] -> FeatureID -> FT
--- lookup >>= adjust -> probably not efficient
+-- lookup >>= adjust -> probably not efficient, but survivable
 updateParents ft fs newParent = foldr (\fid acc -> maybe (error $ "Feature doesn't exist: " ++ show fid) (\_f-> M.adjust (over parentID (const newParent)) fid acc) (M.lookup fid ft) ) ft fs
 
 ----- Some Tests
+----------------
 -- Try:
 -- $ stack repl
 -- ghci> test_exe1
@@ -209,12 +210,24 @@ test_plan1 = [ChangeOperation (TP 0) (RemoveFeature (FeatureID "fid 1"))]
 
 mkOp :: UpdateOperation -> (FM -> FM)
 mkOp (ChangeOperation (TP 0) (RemoveFeature fid)) = \m -> removeFeature m fid
+mkOp (ChangeOperation (TP 0) (RemoveGroup gid)) = \m -> removeGroup m gid
+mkOp (ChangeOperation (TP 0) (MoveFeature fid gid)) = \m -> moveFeature m (fid, gid)
+mkOp (ChangeOperation (TP 0) (MoveGroup gid fid)) = \m -> moveGroup m (gid, fid)
+mkOp (ChangeOperation (TP 0) (ChangeFeatureType fid fType)) = \m -> changeFeatureVariationType m (fid, fType)
+mkOp (ChangeOperation (TP 0) (ChangeGroupType gid gType)) = \m -> changeGroupVariationType m (gid, gType)
+mkOp (ChangeOperation (TP 0) (ChangeFeatureName fid name)) = \m -> renameFeature m (fid, name)
 mkOp (AddOperation _ (AddFeature fid name fType gid)) = \m -> addFeature m (fid,name,gid,fType)
--- TODO: to be completed with all other operations!
-mkOp _ = error "Op NYI or TP-error (must be 0)!"
+mkOp (AddOperation _ (AddGroup gid gType fid)) = \m -> addGroup m (fid,gid,gType)
+mkOp _ = error "TP must be 0, we're not using it!"
 
+test_exe1 :: FM
 test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
 
+featureModelToFM :: FeatureModel -> FM
+featureModelToFM _ = error "TODO: Not yet implemented!"
+
+exampleWithoutTP :: [UpdateOperation]
+exampleWithoutTP = error "TODO: translate ExampleEvolutionPlan without timepoints"
 
 -- TODOs:
 -- over .. (const foo) is probably a pattern.
