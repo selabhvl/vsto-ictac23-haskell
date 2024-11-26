@@ -167,22 +167,28 @@ allWellFormed fids ft = all (\f -> isWellFormed ft f) fids
 -- Rule moveGroup
 moveGroup :: FM -> (GroupID, FeatureID) -> FM
 moveGroup (FM rfid ft) (gid, newParent)
-  | allNotSubFeature fs newParent rfid ft = error "NYI"
+  | isJust oldParentJ && allNotSubFeature fs newParent rfid ft = FM rfid ft''''
   | otherwise = error "moveGroup"
   where
     fnewj = M.lookup newParent ft
     f = fromJust fnewj
     ft' = M.delete newParent ft -- let's stick to Maude here
-    oldParentj = M.foldrWithKey (\fk f acc -> let (g,gs) = partition (\gx -> _groupID gx == gid) (_childGroups f) in if (not . null) g then Just ((fk,f), head g, gs) else acc) Nothing ft'
+    oldParentJ = M.foldrWithKey (\fk f acc -> let (g,gs) = partition (\gx -> _groupID gx == gid) (_childGroups f) in if (not . null) g then Just ((fk,f), head g, gs) else acc) Nothing ft'
     oldParent = fst . fst3 . fromJust $ oldParentJ
     oldParentf = snd . fst3 . fromJust $ oldParentJ
     gs' = thd3 . fromJust $ oldParentJ
     g = snd3 . fromJust $ oldParentJ
+    fs = _childFeatures g
     ft'' = M.delete oldParent ft'
-    ft''' = M.insert newParent (over childGroups (g:)) $ M.insert oldParent (over childGroups (const gs')) ft
+    ft''' = M.insert newParent (over childGroups (g:) f) $ M.insert oldParent (over childGroups (const gs') oldParentf) ft''
+    ft'''' = updateParents ft''' fs newParent
 
-allNotSubFeatures :: [FeatureID] -> FeatureID -> FeatureID -> FT -> Bool
+allNotSubFeature :: [FeatureID] -> FeatureID -> FeatureID -> FT -> Bool
 allNotSubFeature fs fid rfid ft = all (\f -> not $ isSubFeature f fid rfid ft) fs
+
+updateParents :: FT -> [FeatureID] -> FeatureID -> FT
+-- lookup >>= adjust -> probably not efficient
+updateParents ft fs newParent = foldr (\fid acc -> maybe (error $ "Feature doesn't exist: " ++ show fid) (\_f-> M.adjust (over parentID (const newParent)) fid acc) (M.lookup fid ft) ) ft fs
 
 ----- Some Tests
 -- Try:
@@ -199,9 +205,12 @@ test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = me, _featur
 test_plan1 :: [UpdateOperation]
 test_plan1 = [ChangeOperation (TP 0) (RemoveFeature (FeatureID "fid 1"))]
 
+-- TODO: MOAR plans!
+
 mkOp :: UpdateOperation -> (FM -> FM)
 mkOp (ChangeOperation (TP 0) (RemoveFeature fid)) = \m -> removeFeature m fid
 mkOp (AddOperation _ (AddFeature fid name fType gid)) = \m -> addFeature m (fid,name,gid,fType)
+-- TODO: to be completed with all other operations!
 mkOp _ = error "Op NYI or TP-error (must be 0)!"
 
 test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
