@@ -8,12 +8,14 @@
 module Maude where
 
 import Control.Lens
+import Control.Monad (liftM)
 import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
 import Data.List
 import Data.Maybe
 import Data.Tuple.Utils
-import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name, FeatureModel)
+import Test.QuickCheck
+import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
 
 data Feature = F
@@ -24,7 +26,7 @@ data Feature = F
   }
   deriving (Show, Eq)
 
-data Group = Group
+data Group = G
   { _groupID :: GroupID
   , _groupType :: GroupType
   , _childFeatures :: [FeatureID]
@@ -130,7 +132,7 @@ changeFeatureVariationType (FM rfid ft) (fid, ftype')
 addGroup :: FM -> (FeatureID, GroupID, GroupType) -> FM
 addGroup (FM rfid ft) (fid, gid, gtype)
   | isJust fj && isUniqueGroupID gid ft -- Maude seems fishy here, reduntant update of FT?
-    = FM rfid $ M.adjust (over childGroups ((Group {_groupID = gid, _groupType = gtype, _childFeatures= []}):)) fid ft
+    = FM rfid $ M.adjust (over childGroups ((G {_groupID = gid, _groupType = gtype, _childFeatures= []}):)) fid ft
   | otherwise = error "addGroup"
   where
     fj = M.lookup fid ft
@@ -159,7 +161,7 @@ changeGroupVariationType (FM rfid ft) (gid, gtype)
      gs   = thd3 . fromJust $ fidj
      fs   = _childFeatures . snd3 . fromJust $ fidj
      -- couldn't be bothered to do the 2nd `over`
-     ft'' = M.adjust (over childGroups (const (Group {_groupID=gid, _groupType=gtype, _childFeatures = _childFeatures . snd3 . fromJust $ fidj} : gs))) parentFid ft
+     ft'' = M.adjust (over childGroups (const (G {_groupID=gid, _groupType=gtype, _childFeatures = _childFeatures . snd3 . fromJust $ fidj} : gs))) parentFid ft
 
 allWellFormed :: [FeatureID] -> FT -> Bool
 allWellFormed fids ft = all (\f -> isWellFormed ft f) fids
@@ -204,6 +206,59 @@ mkOp _ = error "TP must be 0, we're not using it!"
 
 featureModelToFM :: FeatureModel -> FM
 featureModelToFM _ = error "TODO: Translation from Ida's iv-based plans to the flat one here not yet implemented!"
+
+----- WF
+
+wf1 :: FM -> Bool
+wf1 (FM rfid ft) = M.member rfid ft
+
+wf2 :: FM -> Bool
+wf2 (FM rfid ft) = (maybe False (\f -> _featureType f == Mandatory)) $ M.lookup rfid ft
+
+wf3 :: FM -> Bool
+wf3 (FM _rfid ft) = noDupes . (map _name) $ M.elems ft
+
+noDupes :: Ord a => [a] -> Bool
+noDupes xs = nub xs == xs
+-- TODO: use nubOrd
+
+----- QuickCheck
+
+prop_wf :: FM -> Bool
+prop_wf fm = and $ map (\f -> f fm) [wf1, wf2, wf3]
+
+-- Simple example. Should fail since wf3 is ofc more complex.
+prop_wf21 fm = wf2 fm ==> wf3 fm
+
+instance Arbitrary FeatureID where
+  arbitrary = liftM FeatureID (("fid_" ++) . getASCIIString <$> resize 5 arbitrary)
+instance Arbitrary GroupID where
+  arbitrary = liftM GroupID (("gid_" ++) . getASCIIString <$> resize 5 arbitrary)
+
+instance Arbitrary Feature where
+  arbitrary = do
+    name <- ("F_" ++) . getASCIIString <$> resize 5 arbitrary
+    pid <- arbitrary
+    ftype <- oneof [return Mandatory, return Optional]
+    cgs <- arbitrary
+    return $ F { _name = name, _parentID = pid, _featureType = ftype, _childGroups = cgs }
+
+instance Arbitrary Group where
+  arbitrary = do
+    gid <- arbitrary
+    t <- oneof [return Alternative, return Or, return And]
+    cfs <- arbitrary
+    return $ G {_groupID = gid, _groupType = t, _childFeatures = cfs}
+
+instance Arbitrary FM where
+  arbitrary = do
+    rf <- arbitrary
+    -- TODO: fix parent for root.
+    rfid <- liftM FeatureID arbitrary
+    return (FM rfid (M.singleton rfid rf))
+
+-- TODO: generator for plans
+-- Q: Actually instead of generating arbitrary FMs we could of course start with the "empty" model and just (valid) updates...
 
 ----- Some Tests
 ----------------

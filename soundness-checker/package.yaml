@@ -28,6 +28,7 @@ dependencies:
 - lens-aeson
 - MissingH
 - mtl
+- QuickCheck
 - text
 - pretty-simple
 - IntervalMap
