@@ -26,6 +26,7 @@ dependencies:
 - containers
 - lens
 - lens-aeson
+- MissingH
 - mtl
 - text
 - pretty-simple
