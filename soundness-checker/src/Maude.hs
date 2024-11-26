@@ -266,6 +266,7 @@ instance Arbitrary FM where
 -- $ stack repl
 -- ghci> test_exe1
 -- ...
+-- ghci> Test.QuickCheck.quickCheck prop_XXX
 
 test_fm1 :: FM
 test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = me, _featureType = Mandatory, _childGroups = []}
