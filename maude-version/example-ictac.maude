@@ -1,0 +1,47 @@
+load featuremodel.maude
+
+mod DWINPUT is including FEATUREMODEL-CHECKER . protecting STRING + NAT .
+  subsorts String < FeatureID GroupID Name .
+  subsort Nat < TimePoint .
+  op model : -> FeatureModel .
+  op plan : -> Plans .
+  op log : -> Log .
+  op init : -> TimeConfiguration .
+  eq init = currentTime: 0 C: model # done # log plan: plan .
+
+*****************************************************************    
+*** This example is illustrated by Fig.4 in the ictac23 paper ***
+*****************************************************************
+
+  eq model = FM("fidA", ["fidA" -> f("A", noParent, noG, MANDATORY)]) .
+
+  eq plan =
+  at 1 do
+  addGroup("fidA", "gidA", AND)
+  addFeature("fidB", "B", "gidA", OPTIONAL)
+  addFeature("fidC", "C", "gidA", OPTIONAL) 
+  addGroup("fidB", "gidB", AND)
+  addFeature("fidD", "D", "gidB", OPTIONAL)
+  addFeature("fidE", "E", "gidB", OPTIONAL) 
+  addGroup("fidE", "gidE", AND)
+  addFeature("fidF", "F", "gidE", OPTIONAL)
+  addFeature("fidG", "G", "gidE", OPTIONAL) 
+  ; ;;
+
+*** modified plan ***
+---  at 2 do
+---  addGroup("fidF", "gidF", AND)
+---  moveFeature("fidD","gidF")
+---  ; ;;
+
+  at 3 do
+  addGroup("fidD", "gidD", AND)
+  moveFeature("fidE","gidD")
+  ; ;;
+
+  at 4 do
+  addGroup("fidC", "gidC", AND)
+  moveFeature("fidD","gidC")
+  ; .
+
+endm

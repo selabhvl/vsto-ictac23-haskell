@@ -1,0 +1,61 @@
+load featuremodel.maude
+
+mod DWINPUT is including FEATUREMODEL-CHECKER . protecting STRING + NAT .
+  subsorts String < FeatureID GroupID Name .
+  subsort Nat < TimePoint .
+  op model : -> FeatureModel .
+  op plan : -> Plans .
+  op log : -> Log .
+  op init : -> TimeConfiguration .
+  eq init = currentTime: 0 C: model # done # log plan: plan .
+
+*****************************************************************
+*** This example contains 4 moveFeature operations.  
+*** The added operations at time 6 will create a cycle at time 7.
+*****************************************************************
+
+  eq model = FM("fidA", ["fidA" -> f("A", noParent, noG, MANDATORY)]) .
+
+  eq plan =
+  at 1 do
+  addGroup("fidA", "gidA", AND)
+  addFeature("fidB", "B", "gidA", OPTIONAL)
+  addFeature("fidC", "C", "gidA", OPTIONAL) 
+  addGroup("fidB", "gidB", AND)
+  addFeature("fidD", "D", "gidB", OPTIONAL)
+  addFeature("fidE", "E", "gidB", OPTIONAL) 
+  addGroup("fidE", "gidE", AND) 
+  addFeature("fidF", "F", "gidE", OPTIONAL)
+  addFeature("fidG", "G", "gidE", OPTIONAL) 
+  ; ;;
+
+  at 3 do
+  addGroup("fidD", "gidD", AND)
+  moveFeature("fidE","gidD")
+  ; ;;
+
+  at 4 do
+  addGroup("fidC", "gidC", AND)
+  moveFeature("fidD","gidC")
+  ; ;;
+
+  at 5 do
+  addFeature("fidH", "H", "gidA", OPTIONAL)
+  addGroup("fidH", "gidH", AND)
+  addFeature("fidI", "I", "gidH", OPTIONAL)
+  addFeature("fidJ", "J", "gidH", OPTIONAL) 
+  ; ;;
+
+*** Modified Plan ***
+*** (add new operations to time 6) ***
+---  at 6 do
+---  addGroup("fidI", "gidI", AND)
+---  moveFeature("fidB","gidI")
+---  ; ;;
+
+  at 7 do
+  moveFeature("fidH","gidB")
+  ; .
+
+endm
+

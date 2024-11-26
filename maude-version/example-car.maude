@@ -1,0 +1,38 @@
+load featuremodel.maude
+
+mod DWINPUT is including FEATUREMODEL-CHECKER . protecting STRING + NAT .
+  subsorts String < FeatureID GroupID Name .
+  subsort Nat < TimePoint .
+  op model : -> FeatureModel .
+  op plan : -> Plans .
+  op log : -> Log .
+  op init : -> TimeConfiguration .
+  eq init = currentTime: 0 C: model # done # log plan: plan .
+
+*********************
+*** A car example ***
+*********************
+
+  eq model = FM("Car", ["Car" -> f("Car", noParent, noG, MANDATORY)]) .
+
+  eq plan =
+  at 0 do
+  addGroup("Car", "Car1", AND)
+  addFeature("Infotainment", "Infotainment", "Car1", OPTIONAL)
+  addFeature("Sensors", "Sensors", "Car1", OPTIONAL) 
+  addGroup("Infotainment", "Infotainment1", AND)
+  addFeature("Button Interface", "Button Interface", "Infotainment1", MANDATORY)
+  ; ;;
+
+  at 1 do
+  removeFeature("Button Interface")
+  addFeature("Touch Screen", "Touch Screen", "Infotainment1", MANDATORY)
+  changeFeatureType("Infotainment", MANDATORY)
+  addGroup("Sensors", "Sensors1", OR)
+  addFeature("Front Sensors", "Front Sensors", "Sensors1", OPTIONAL)
+  addFeature("Rear Sensors", "Rear Sensors", "Sensors1", OPTIONAL)
+  ; .
+
+endm
+
+

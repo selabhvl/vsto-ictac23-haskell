@@ -1,0 +1,46 @@
+load featuremodel.maude
+
+mod DWINPUT is including FEATUREMODEL-CHECKER . protecting STRING + NAT .
+  subsorts String < FeatureID GroupID Name .
+  subsort Nat < TimePoint .
+  op model : -> FeatureModel .
+  op plan : -> Plans .
+  op log : -> Log .
+  op init : -> TimeConfiguration .
+  eq init = currentTime: 0 C: model # done # log plan: plan .
+
+********************************************************************************************
+*** This example shows that even with just a tiny change added to the very end of the plan, 
+*** the execution of soundness checking still needs to run through the entire modified plan.
+*** In this case, two cycle-detections are required.  
+********************************************************************************************
+
+  eq model = FM("fidA", ["fidA" -> f("A", noParent, noG, MANDATORY)]) .
+
+  eq plan =
+  at 1 do
+  addGroup("fidA", "gidA", AND)
+  addFeature("fidB", "B", "gidA", OPTIONAL)
+  addFeature("fidC", "C", "gidA", OPTIONAL) 
+  addGroup("fidB", "gidB", AND)
+  addFeature("fidD", "D", "gidB", OPTIONAL)
+  addFeature("fidE", "E", "gidB", OPTIONAL) 
+  addGroup("fidE", "gidE", ALTERNATIVE) 
+  addFeature("fidF", "F", "gidE", OPTIONAL)
+  addFeature("fidG", "G", "gidE", OPTIONAL) 
+  ; ;;
+
+  at 3 do
+  addGroup("fidD", "gidD", AND)
+  moveFeature("fidE","gidD")
+  ; ;;
+
+  at 4 do
+  addGroup("fidC", "gidC", AND)
+  moveFeature("fidD","gidC")
+*** Let's modify the plan by adding the following operation ***
+---  changeFeatureType("fidG", MANDATORY)
+  ; .
+
+endm
+
