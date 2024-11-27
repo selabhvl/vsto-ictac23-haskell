@@ -1,4 +1,4 @@
-# Maude version
+# Maude Version
 
 This directory contains the Maude source code of the soundness checker. 
 Several Maude exmaples of feature model evaluation plans are also provided. 
