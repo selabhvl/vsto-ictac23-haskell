@@ -1,5 +1,4 @@
 # Maude version
---------------
 
 This directory contains the Maude source code of the soundness checker. 
 Several Maude exmaples of feature model evaluation plans are also provided. 
@@ -14,7 +13,7 @@ Table of Contents
       * [Overview of the examples](#overview)
 
 ## What can be ignore in the `featuremodel.maude` file?
-1. The atomic entities, for instance, `feature_exists`, `group_has`````type_`
+1. The atomic entities, for instance, `feature_exists`, `group_has```type_`
 2. Events, for instance, `_start`, `_stops`
 3. Logs, for instance `empty`, `_,_`
 4. The log in the `_#_#_` constructor
