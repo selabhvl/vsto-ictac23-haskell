@@ -15,7 +15,7 @@ Table of Contents
 
 ## What can be ignore in the `featuremodel.maude` file?
 1. The atomic entities, for instance, `feature_exists`, ``group_has`type_``
-2. Events, for instance, `_start`, `_stops`
+2. Events, for instance, `_starts`, `_stops`
 3. Logs, for instance `empty`, `_,_`
 4. The log in the `_#_#_` constructor
 
