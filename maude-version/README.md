@@ -9,11 +9,11 @@ Table of Contents
 
    * [Maude Version](#maude-version)
    * [Table of Contents](#table-of-contents)
-      * [What can be ignored in the `featuremodel.maude` file?](#what-can-be-ignored-in-the-featuremodel-maude-file)
+      * [What can be ignored in the featuremodel.maude file?](#what-can-be-ignored-in-the-featuremodel-maude-file)
       * [How to execute the examples](#how-to-execute-the-example)
       * [Overview of the examples](#overview-of-the-example)
 
-## What can be ignored in the `featuremodel.maude` file?
+## What can be ignored in the featuremodel.maude file?
 1. The atomic entities, for instance, `feature_exists`, ``group_has`type_``
 2. Events, for instance, `_starts`, `_stops`
 3. Logs, for instance `empty`, `_,_`
