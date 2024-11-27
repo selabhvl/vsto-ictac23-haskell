@@ -1,7 +1,7 @@
-# Maude version
+#Maude version
 
 This directory contains the Maude source code of the soundness checker. 
-Severel Maude exmaples of feature model evaluation plans are also provided. 
+Several Maude exmaples of feature model evaluation plans are also provided. 
 
 
 Table of Contents
@@ -12,18 +12,24 @@ Table of Contents
       * [How to execute the examples](#run)
       * [Overview of the examples](#overview)
 
+## What to ignore in the `featuremodel.maude` file?
+1. The atomic entities, for instance, feature_exists, group_has`type_
+2. Events, for instance, `_start`, `_stops`
+3. Logs, for instance `empty`, `_,_`
+4. The log in the `_#_#_` constructor
+
 ## How to execute the examples
 
  
 ```sh
 load example-*.maude 
 ```
-loads the example and the `featuremodel.maude`file. 
+loads the example file and the `featuremodel.maude` file. 
 
 ```sh
 rew init .
 ```
-This executes the example and shows the validity of the given plan.
+This executes the example and shows the validity of the given evolution plan written in the example file.
 
 ## Overview of the examples
 ### example-car.maude
