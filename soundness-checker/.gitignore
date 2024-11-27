@@ -1,4 +1,5 @@
 .stack-work/
+stack.yaml.lock 
 soundness-checker.cabal
 dist-newstyle
 *~
