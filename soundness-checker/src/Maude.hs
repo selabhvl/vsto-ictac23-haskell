@@ -20,7 +20,7 @@ import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePo
 
 data Feature = F
   { _name :: Name
-  , _parentID :: FeatureID
+  , _parentID :: Maybe FeatureID -- root has no parent
   , _featureType :: FeatureType
   , _childGroups :: [Group]
   }
@@ -44,7 +44,7 @@ isWellFormed :: FT -> FeatureID -> Bool
 isWellFormed ft fid = all isWellFormed' (M.assocs ft)
   where
      isWellFormed' (k,f) = fid == k --> not ( (_featureType f) == Mandatory && all (((==) And) . _groupType) (gs f))
-     gs f = maybe [] (\pf -> filter (\g -> fid `elem` (_childFeatures g)) $ _childGroups pf) $ M.lookup (_parentID f) ft
+     gs f = maybe [] (\pf -> filter (\g -> fid `elem` (_childFeatures g)) $ _childGroups pf) $ M.lookup (fromJust $ _parentID f) ft
 
 -- Rule addFeature
 addFeature :: FM -> (FeatureID, Name, GroupID, FeatureType) -> FM
@@ -54,7 +54,7 @@ addFeature (FM rfid ft) (newFid, newName, targetGroup, fType)
  where
    ft' = addFeatureToGroup ft targetGroup newFid
    parentFid = parentOfGroup ft targetGroup
-   ft'' = M.insert newFid (F {_parentID = parentFid, _name = newName, _featureType = fType, _childGroups=[] }) ft'
+   ft'' = M.insert newFid (F {_parentID = Just parentFid, _name = newName, _featureType = fType, _childGroups=[] }) ft'
 
 notExists :: FeatureID -> FT -> Bool
 notExists fid ft = M.notMember fid ft
@@ -71,7 +71,7 @@ addFeatureToGroup ft targetGroup newFid = M.adjust (over childGroups (map (\g ->
     parentID = parentOfGroup ft targetGroup
 
 parentOfGroup :: FT -> GroupID -> FeatureID
-parentOfGroup ft gid = fromJust $ M.foldrWithKey (\k f acc -> if gid `elem` map _groupID (_childGroups f) then Just k else acc) Nothing ft
+parentOfGroup ft gid = fromJust $ M.foldrWithKey (\k f acc -> if gid `elem` map _groupID (_childGroups f) then Just k else acc) (error $ "no parent found for group " ++ show gid) ft
 
 -- Rule removeFeature
 removeFeature :: FM -> FeatureID -> FM
@@ -80,7 +80,7 @@ removeFeature (FM rfid ft) fid
   | otherwise = error $ "removeFeature: " ++ show fid
   where
     f = fromJust $ M.lookup fid ft
-    parentFid = _parentID f
+    parentFid = fromJust $ _parentID f
     gid = parentGroup ft fid
     ft'' = removeFeatureFromParent (M.delete fid ft) parentFid fid
 
@@ -97,19 +97,19 @@ moveFeature (FM rfid ft) (fid, newGroup)
   | otherwise = error "moveFeature"
   where
     f = fromJust $ M.lookup fid ft
-    parentFid = _parentID f
+    parentFid = fromJust $ _parentID f
     ft' = M.delete fid ft
     newParent = parentOfGroup ft newGroup
     ft'' = removeFeatureFromParent ft' parentFid fid
     ft''' = addFeatureToGroup ft'' newGroup fid
-    ft'''' = M.insert fid (over parentID (\_ -> newParent) f) ft''' -- could be M.adjust.
+    ft'''' = M.insert fid (over parentID (const (Just newParent)) f) ft''' -- could be M.adjust.
     gid = parentGroup ft fid
 
 isSubFeature :: FeatureID -> FeatureID -> FeatureID -> FT -> Bool
 isSubFeature fid parentFid rfid ft
   | parentFid == rfid = False
   | fid == parentFid = fid /= rfid -- 2 in 1
-  | otherwise = isSubFeature fid (_parentID f) rfid ft -- careful!
+  | otherwise = isSubFeature fid (fromJust $ _parentID f) rfid ft -- careful!
   where
     f = fromJust $ M.lookup parentFid ft
 
@@ -190,7 +190,7 @@ allNotSubFeature fs fid rfid ft = all (\f -> not $ isSubFeature f fid rfid ft) f
 
 updateParents :: FT -> [FeatureID] -> FeatureID -> FT
 -- lookup >>= adjust -> probably not efficient, but survivable
-updateParents ft fs newParent = foldr (\fid acc -> maybe (error $ "Feature doesn't exist: " ++ show fid) (\_f-> M.adjust (over parentID (const newParent)) fid acc) (M.lookup fid ft) ) ft fs
+updateParents ft fs newParent = foldr (\fid acc -> maybe (error $ "Feature doesn't exist: " ++ show fid) (\_f-> M.adjust (over parentID (const (Just newParent))) fid acc) (M.lookup fid ft) ) ft fs
 
 mkOp :: UpdateOperation -> (FM -> FM)
 mkOp (ChangeOperation (TP 0) (RemoveFeature fid)) = \m -> removeFeature m fid
@@ -208,15 +208,41 @@ featureModelToFM :: FeatureModel -> FM
 featureModelToFM _ = error "TODO: Translation from Ida's iv-based plans to the flat one here not yet implemented!"
 
 ----- WF
+-- Possibly missing:
+-- + all GroupIDs are unique
 
-wf1 :: FM -> Bool
-wf1 (FM rfid ft) = M.member rfid ft
+wf1 :: FM -> Bool -- [VS] Checking a bit /harder/ here.
+wf1 (FM rfid ft) = M.member rfid ft && (isNothing . _parentID . fromJust $ (M.lookup rfid ft))
+                                    && and (map (\(fid,f) -> fid == rfid || (fromJust . _parentID $ f) `M.member` ft) (M.assocs ft))
 
 wf2 :: FM -> Bool
 wf2 (FM rfid ft) = (maybe False (\f -> _featureType f == Mandatory)) $ M.lookup rfid ft
 
 wf3 :: FM -> Bool
 wf3 (FM _rfid ft) = noDupes . (map _name) $ M.elems ft
+
+wf4 :: FM -> Bool
+wf4 (FM _rfid ft) = True -- TODO: NOP?
+
+wf5 :: FM -> Bool
+wf5 fm@(FM rfid ft) = all ((== 1). length . filter (== True)) featSeen -- filter id?
+  where
+    ftNoRoot = M.delete rfid ft
+    featSeen = map (\f -> map (\g -> f `elem` (_childFeatures g)) (allGroups fm)) $ M.keys ftNoRoot
+ 
+wf6 :: FM -> Bool
+wf6 fm@(FM rfid ft) = all (\g -> (==1) . length . filter (\(gid,_) -> gid == _groupID g) $ gidMap) (allGroups fm)
+  where
+    gidMap = concatMap (\(fid,f) -> map (\g -> (_groupID g, fid)) (_childGroups f) ) $ M.assocs ft :: [(GroupID, FeatureID)]
+
+wf7 :: FM -> Bool
+wf7 fm@(FM rfid ft) = all (\g -> if _groupType g `elem` [Alternative, Or] then all (\fid -> (/= Mandatory) . _featureType . fromJust $ M.lookup fid ft) $ _childFeatures g else True) (allGroups fm)
+
+wf8 :: FM -> Bool
+wf8 fm@(FM rfid ft) = all (\g -> if _groupType g `elem` [Alternative, Or] then length (_childFeatures g) > 1 else True) (allGroups fm)
+
+allGroups :: FM -> [Group]
+allGroups (FM rfid ft) = concatMap _childGroups $ M.elems ft
 
 noDupes :: Ord a => [a] -> Bool
 noDupes xs = nub xs == xs
@@ -225,11 +251,13 @@ noDupes xs = nub xs == xs
 ----- QuickCheck
 
 prop_wf :: FM -> Bool
-prop_wf fm = and $ map (\f -> f fm) [wf1, wf2, wf3]
+prop_wf fm = and $ map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7, wf8]
 
 -- Simple example. Should fail since wf3 is ofc more complex.
+prop_wf21 :: FM -> Property
 prop_wf21 fm = wf2 fm ==> wf3 fm
 
+-- generate some reasonable names:
 instance Arbitrary FeatureID where
   arbitrary = liftM FeatureID (("fid_" ++) . getASCIIString <$> resize 5 arbitrary)
 instance Arbitrary GroupID where
@@ -238,9 +266,9 @@ instance Arbitrary GroupID where
 instance Arbitrary Feature where
   arbitrary = do
     name <- ("F_" ++) . getASCIIString <$> resize 5 arbitrary
-    pid <- arbitrary
+    pid <- arbitrary -- TODO
     ftype <- oneof [return Mandatory, return Optional]
-    cgs <- arbitrary
+    cgs <- arbitrary -- TODO
     return $ F { _name = name, _parentID = pid, _featureType = ftype, _childGroups = cgs }
 
 instance Arbitrary Group where
@@ -269,7 +297,7 @@ instance Arbitrary FM where
 -- ghci> Test.QuickCheck.quickCheck prop_XXX
 
 test_fm1 :: FM
-test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = me, _featureType = Mandatory, _childGroups = []}
+test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = []}
   where
     me = FeatureID "fid 1"
 
