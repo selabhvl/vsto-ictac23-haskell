@@ -8,15 +8,14 @@
 module Maude where
 
 import Control.Lens
-import Control.Monad (liftM)
 import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
 import Data.List
 import Data.Maybe
 import Data.Tuple.Utils
-import Test.QuickCheck
-import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
+import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
+import Types hiding (Group, Feature, _childFeatures, _childGroups, _name, _groupID)
 
 data Feature = F
   { _name :: Name
@@ -254,8 +253,8 @@ prop_wf :: FM -> Bool
 prop_wf fm = and $ map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7, wf8]
 
 -- Simple example. Should fail since wf3 is ofc more complex.
-prop_wf21 :: FM -> Property
-prop_wf21 fm = wf2 fm ==> wf3 fm
+-- prop_wf21 :: FM -> Property
+-- prop_wf21 fm = wf2 fm ==> wf3 fm
 
 -- generate some reasonable names:
 instance Arbitrary FeatureID where
@@ -296,22 +295,3 @@ instance Arbitrary FM where
 -- ...
 -- ghci> Test.QuickCheck.quickCheck prop_XXX
 
-test_fm1 :: FM
-test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = []}
-  where
-    me = FeatureID "fid 1"
-
--- We're reusing the operations from Ida's code here, but of course TPs and intervals are ignored.
-test_plan1 :: [UpdateOperation]
-test_plan1 = [ChangeOperation (TP 0) (RemoveFeature (FeatureID "fid 1"))]
-
--- TODO: MOAR plans!
-
-test_exe1 :: FM
-test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
-
-exampleWithoutTP :: [UpdateOperation]
-exampleWithoutTP = error "TODO: translate ExampleEvolutionPlan without timepoints"
-
--- TODOs:
--- over .. (const foo) is probably a pattern.
