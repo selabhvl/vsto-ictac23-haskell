@@ -1,9 +1,8 @@
-module TestExe71 where
+module TestExe where
 
 import Maude
-import Types (FeatureID(..), GroupID, FeatureType(..), GroupType(..), Name, FeatureModel)
-import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
-import Types hiding (Group, Feature, _childFeatures, _childGroups, _name, _groupID)
+import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..))
+import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
 import qualified Data.Map as M
 
 -- the initial feature model
@@ -22,9 +21,9 @@ createFM =
       -- Empty feature model containing the root feature only
       fmWithRoot = FM rootFeatureID $ M.singleton rootFeatureID
         (F { _name = "Root"
-           , _parentID = rootFeatureID
+           , _parentID = Nothing
            , _featureType = Mandatory
-           , _childGroups = [Group { _groupID = rootGroupID, _groupType = Or, _childFeatures = [] }]
+           , _childGroups = [G { _groupID = rootGroupID, _groupType = Or, _childFeatures = [] }]
            })
 
       -- Add the 10 child features to the root
