@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -7,26 +8,29 @@
 
 module Types where
 
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData)
+
 import Control.Lens
 import qualified Data.IntervalMap.Generic.Strict as IM
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-newtype FeatureID = FeatureID String deriving (Show, Eq, Ord)
+newtype FeatureID = FeatureID String deriving (Show, Eq, Ord, Generic, NFData)
 type RootID = FeatureID
-newtype GroupID = GroupID String deriving (Show, Eq, Ord)
+newtype GroupID = GroupID String deriving (Show, Eq, Ord, Generic, NFData)
 type Name = String
 
 data GroupType
   = Alternative
   | Or
   | And
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 data FeatureType
   = Optional
   | Mandatory
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 --------------------
 --   VALIDITIES   --

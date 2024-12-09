@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -6,6 +7,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Maude where
+
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData)
 
 import Control.Lens
 import Control.Monad (liftM)
@@ -24,18 +28,18 @@ data Feature = F
   , _featureType :: FeatureType
   , _childGroups :: [Group]
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 data Group = G
   { _groupID :: GroupID
   , _groupType :: GroupType
   , _childFeatures :: [FeatureID]
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 type FT = M.Map FeatureID Feature
 data FM = FM FeatureID FT
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 makeFieldsNoPrefix ''Feature
 makeFieldsNoPrefix ''Group
@@ -79,8 +83,8 @@ removeFeature (FM rfid ft) fid
   | rfid /= fid && null (_childGroups f) && gid = FM rfid ft''  -- force eval of `gid`
   | otherwise = error $ "removeFeature: " ++ show fid
   where
-    f = fromJust $ M.lookup fid ft
-    parentFid = fromJust $ _parentID f
+    f = maybe (error $ "removeFeature: " ++ show fid ++ " not found.") (id) $ M.lookup fid ft
+    parentFid = maybe (error $ "removeFeature: parentID shouldn't be Nothing: " ++ show f ) (id) $ _parentID f
     gid = parentGroup ft fid
     ft'' = removeFeatureFromParent (M.delete fid ft) parentFid fid
 
@@ -164,7 +168,7 @@ changeGroupVariationType (FM rfid ft) (gid, gtype)
      ft'' = M.adjust (over childGroups (const (G {_groupID=gid, _groupType=gtype, _childFeatures = _childFeatures . snd3 . fromJust $ fidj} : gs))) parentFid ft
 
 allWellFormed :: [FeatureID] -> FT -> Bool
-allWellFormed fids ft = all (\f -> isWellFormed ft f) fids
+allWellFormed fids ft = all (isWellFormed ft) fids
 
 -- Rule moveGroup
 moveGroup :: FM -> (GroupID, FeatureID) -> FM
@@ -250,8 +254,12 @@ noDupes xs = nub xs == xs
 
 ----- QuickCheck
 
-prop_wf :: FM -> Bool
-prop_wf fm = and $ map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7, wf8]
+prop_wf :: Bool -> FM -> Bool
+prop_wf shouldFail fm
+  | and results = True
+  | otherwise = if shouldFail then error $ show results else False
+  where
+    results = map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7, wf8]
 
 -- Simple example. Should fail since wf3 is ofc more complex.
 prop_wf21 :: FM -> Property
@@ -281,9 +289,9 @@ instance Arbitrary Group where
 instance Arbitrary FM where
   arbitrary = do
     rf <- arbitrary
-    -- TODO: fix parent for root.
     rfid <- liftM FeatureID arbitrary
-    return (FM rfid (M.singleton rfid rf))
+    -- fix parent for root:
+    return (FM rfid (M.singleton rfid (over parentID (const Nothing) rf)))
 
 -- TODO: generator for plans
 -- Q: Actually instead of generating arbitrary FMs we could of course start with the "empty" model and just (valid) updates...
@@ -295,6 +303,8 @@ instance Arbitrary FM where
 -- ghci> test_exe1
 -- ...
 -- ghci> Test.QuickCheck.quickCheck prop_XXX
+-- Or more advanced, generate a random valid model (by throwing away many invalid ones), and then ... check again ;-)
+-- Test.QuickCheck.quickCheck (\fm -> Maude.prop_wf False fm Test.QuickCheck.==> Maude.prop_wf True fm)
 
 test_fm1 :: FM
 test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = []}

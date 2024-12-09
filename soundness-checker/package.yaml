@@ -24,6 +24,7 @@ dependencies:
 - aeson
 - cond
 - containers
+- deepseq
 - lens
 - lens-aeson
 - MissingH

@@ -1,0 +1,19 @@
+module TestIctac where
+
+import Maude
+
+p :: [Operations] = [] -- construct long plan
+
+measureMaude = do
+  m = initialModel im
+  m' = applyAndValidate m p -- {tMS}
+  p' = update p (t,op)  
+  applyAndValidate m p' -- {tME}
+  -- tME = tMS + epsilon
+
+measureICTAC = do
+  m :: IBFM = mkInitial_ibfm im
+  m' = fmep_convert m p -- {tIS}
+  m'' = fmep_apply m' (t,op) -- {tIE = epsilon } 
+
+-- CLAIM: tMS+tME >>> tIS+tIE
