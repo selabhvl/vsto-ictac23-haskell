@@ -100,4 +100,10 @@ test_exe71 = do
   let diff = (fromIntegral (end - start)) / (10^12)
   printf "Computation time: %0.9f sec\n" (diff :: Double)
   
-
+-- Potential experiment:
+-- p = (create 100 Features dangling from the root-feature) ++ [RenameFeature leftMost test]
+-- Could pick any `t`
+-- (t, op) = ("50", DeleteFeature leftMost)
+-- prop_wf (apply p im) = True
+-- p' = let (l,r) = splitAt 50 p in l ++ [op] ++ r
+-- apply p' im: plan p' will fail in the very last step because we try to Rename a non-existing feature
