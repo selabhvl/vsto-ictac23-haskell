@@ -257,7 +257,7 @@ noDupes xs = nub xs == xs
 prop_wf :: Bool -> FM -> Bool
 prop_wf shouldFail fm
   | and results = True
-  | otherwise = if shouldFail then error $ show results else False
+  | otherwise = if shouldFail then error $ "Some WF failed: " ++ show ((map fst) . (filter (not . snd)) . (zip [1..]) $ results) else False
   where
     results = map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7, wf8]
 
@@ -316,6 +316,9 @@ test_plan1 :: [UpdateOperation]
 test_plan1 = [ChangeOperation (TP 0) (RemoveFeature (FeatureID "fid 1"))]
 
 -- TODO: MOAR plans!
+
+fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
+fold_and_test im = foldl (\(i,m) op -> let step = (mkOp op) m in if prop_wf False step then (i+1, step) else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
 
 test_exe1 :: FM
 test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1

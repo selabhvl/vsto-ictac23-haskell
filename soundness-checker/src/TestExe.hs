@@ -91,9 +91,9 @@ test_exe71 = do
       operations = removalOperations ++ [addGroup6Operation] ++ addFeaturesTo6 ++ 
                    [addGroup12Operation] ++ addFeaturesTo12 ++ additionalRemovals ++ [reAddChild6_Sub2]
 
-  print $ prop_wf False createFM -- sanity check
+  print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
   start <- getCPUTime
-  let result = foldl (\fm op -> mkOp op fm) createFM $ operations
+  let (_, result) = fold_and_test createFM operations
   rnf result `seq` return ()
   end <- getCPUTime
   print $ prop_wf True result
