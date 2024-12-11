@@ -90,16 +90,9 @@ test_exe71 = do
       -- All operations
       operations = removalOperations ++ [addGroup6Operation] ++ addFeaturesTo6 ++ 
                    [addGroup12Operation] ++ addFeaturesTo12 ++ additionalRemovals ++ [reAddChild6_Sub2]
+  measure createFM operations
 
-  print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
-  start <- getCPUTime
-  let (_, result) = fold_and_test createFM operations
-  rnf result `seq` return ()
-  end <- getCPUTime
-  print $ prop_wf True result
-  let diff = (fromIntegral (end - start)) / (10^12)
-  printf "Computation time: %0.9f sec\n" (diff :: Double)
-  
+
 -- Potential experiment:
 -- p = (create 100 Features dangling from the root-feature) ++ [RenameFeature leftMost test]
 -- Could pick any `t`
