@@ -24,6 +24,10 @@ import Data.Tuple.Utils
 import Test.QuickCheck
 import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
+import Types (IntervalBasedFeatureModel)
+
+import qualified Apply
+import qualified ExampleIntervalBasedFeatureModel
 
 data Feature = F
   { _name :: Name
@@ -329,8 +333,8 @@ test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
 exampleWithoutTP :: [UpdateOperation]
 exampleWithoutTP = error "TODO: translate ExampleEvolutionPlan without timepoints"
 
-myReallyLongPlan :: FM -> [UpdateOperation]
-myReallyLongPlan fm@(FM rfid _) = AddOperation (Validity (TP 0) Forever) (AddGroup (GroupID "gid") Or rfid) : [let fid = FeatureID (show i) in let name = show i in AddOperation (Validity (TP 0) Forever) (AddFeature fid name Optional (GroupID "gid")) | i <- [1..1000] ]
+myReallyLongPlan :: FeatureID -> [UpdateOperation]
+myReallyLongPlan rfid = AddOperation (Validity (TP 0) Forever) (AddGroup (GroupID "gid") Or rfid) : [let fid = FeatureID (show i) in let name = show i in AddOperation (Validity (TP 0) Forever) (AddFeature fid name Optional (GroupID "gid")) | i <- [1..1000] ]
 
 measure createFM operations = do
   print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
@@ -345,9 +349,28 @@ measure createFM operations = do
 mrlp_experiment = do
   measure hm tailPlan
   where
-    hm = foldl (\m op -> mkOp op $ m) test_fm1 headPlan
-    (headPlan, tailPlan) = splitAt 3 (myReallyLongPlan test_fm1)
-    
+    im@(FM rfid _) = test_fm1
+    hm = foldl (\m op -> mkOp op $ m) im headPlan
+    (headPlan, tailPlan) = splitAt 3 (myReallyLongPlan rfid)
+
+measure_tcs :: IntervalBasedFeatureModel -> [UpdateOperation] -> IO ()
+measure_tcs createFM operations = do
+  -- print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
+  start <- getCPUTime
+  let result = foldl (\m op -> Apply.apply op m) ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel operations
+  rnf result `seq` return ()
+  end <- getCPUTime
+  -- print $ prop_wf True result
+  let diff = (fromIntegral (end - start)) / (10^12)
+  printf "Computation time: %0.9f sec\n" (diff :: Double)
+
+mrlp_experiment_tcs = do
+  measure_tcs hm tailPlan
+  where
+    im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
+    hm = foldl (\m op -> Apply.apply op m) im headPlan
+    (headPlan, tailPlan) = splitAt 3 (myReallyLongPlan (FeatureID "feature:car"))
+
 -- TODOs:
 -- over .. (const foo) is probably a pattern.
 

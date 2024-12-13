@@ -1,4 +1,4 @@
-module ExampleEvolutionPlan (exampleEvolutionPlan) where
+module ExampleEvolutionPlan (exampleEvolutionPlan, model) where
 
 import Types
 
