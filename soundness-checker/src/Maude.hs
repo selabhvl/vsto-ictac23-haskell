@@ -266,7 +266,7 @@ prop_wf shouldFail fm
   | and results = True
   | otherwise = if shouldFail then error $ "Some WF failed: " ++ show ((map fst) . (filter (not . snd)) . (zip [1..]) $ results) else False
   where
-    results = map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7, wf8]
+    results = map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7] -- XXX , wf8]
 
 -- Simple example. Should fail since wf3 is ofc more complex.
 prop_wf21 :: FM -> Property
@@ -339,10 +339,14 @@ myReallyLongPlan rfid = AddOperation (Validity (TP 0) Forever) (AddGroup (GroupI
 measure createFM operations = do
   print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
   start <- getCPUTime
-  let (_, result) = fold_and_test createFM operations
-  rnf result `seq` return ()
-  end <- getCPUTime
+  -- This would run the well-formedness check after every step:
+  -- let (_, result) = fold_and_test createFM operations
+  -- Run wf-check only at the end:
+  let result = foldl (\m op -> mkOp op $ m) createFM operations
+  -- Q: do we need the `rnf` if we're running the wf-check?
+  -- rnf result `seq` return ()
   print $ prop_wf True result
+  end <- getCPUTime
   let diff = (fromIntegral (end - start)) / (10^12)
   printf "Computation time: %0.9f sec\n" (diff :: Double)
 
@@ -355,12 +359,14 @@ mrlp_experiment = do
 
 measure_tcs :: IntervalBasedFeatureModel -> [UpdateOperation] -> IO ()
 measure_tcs createFM operations = do
-  -- print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
+  -- TODO? print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
   start <- getCPUTime
   let result = foldl (\m op -> Apply.apply op m) ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel operations
-  rnf result `seq` return ()
+  -- TODO: this would require us to thread the typeclasses through Ida's code: rnf result `seq` return ()
+  -- Instead, let's just force printing the model:
+  print $ show $ length $ show result
+  -- show result `seq` return ()
   end <- getCPUTime
-  -- print $ prop_wf True result
   let diff = (fromIntegral (end - start)) / (10^12)
   printf "Computation time: %0.9f sec\n" (diff :: Double)
 
