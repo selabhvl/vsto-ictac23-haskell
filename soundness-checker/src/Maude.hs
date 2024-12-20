@@ -61,7 +61,10 @@ isWellFormed ft fid = all isWellFormed' (M.assocs ft)
 addFeature :: FM -> (FeatureID, Name, GroupID, FeatureType) -> FM
 addFeature (FM rfid ft) (newFid, newName, targetGroup, fType)
  | notExists newFid ft && isUniqueName newName ft && isWellFormed ft'' newFid = FM rfid ft''
- | otherwise   = error "Not allowed"
+ | otherwise = error $ "Not allowed: "
+                        ++ "\n  FeatureID Exists: " ++ show (not $ notExists newFid ft)
+                        ++ "\n  Name Unique: " ++ show (not $ isUniqueName newName ft)
+                        ++ "\n  Well-formed: " ++ show (not $ isWellFormed ft'' newFid)
  where
    ft' = addFeatureToGroup ft targetGroup newFid
    parentFid = parentOfGroup ft targetGroup
@@ -88,7 +91,9 @@ parentOfGroup ft gid = fromJust $ M.foldrWithKey (\k f acc -> if gid `elem` map 
 removeFeature :: FM -> FeatureID -> FM
 removeFeature (FM rfid ft) fid
   | rfid /= fid && null (_childGroups f) && gid = FM rfid ft''  -- force eval of `gid`
-  | otherwise = error $ "removeFeature: " ++ show fid
+  | otherwise = error $ "removeFeature: " ++ show fid ++ " not allowed.\n"
+                         ++ "Feature Exists: " ++ show (M.member fid ft) ++ "\n"
+                         ++ "Feature Details: " ++ show (M.lookup fid ft)
   where
     f = maybe (error $ "removeFeature: " ++ show fid ++ " not found.") (id) $ M.lookup fid ft
     parentFid = maybe (error $ "removeFeature: parentID shouldn't be Nothing: " ++ show f ) (id) $ _parentID f
@@ -300,83 +305,5 @@ instance Arbitrary FM where
     -- fix parent for root:
     return (FM rfid (M.singleton rfid (over parentID (const Nothing) rf)))
 
--- TODO: generator for plans
--- Q: Actually instead of generating arbitrary FMs we could of course start with the "empty" model and just (valid) updates...
-
------ Some Tests
-----------------
--- Try:
--- $ stack repl
--- ghci> test_exe1
--- ...
--- ghci> Test.QuickCheck.quickCheck prop_XXX
--- Or more advanced, generate a random valid model (by throwing away many invalid ones), and then ... check again ;-)
--- Test.QuickCheck.quickCheck (\fm -> Maude.prop_wf False fm Test.QuickCheck.==> Maude.prop_wf True fm)
-
-test_fm1 :: FM
-test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = []}
-  where
-    me = FeatureID "fid 1"
-
--- We're reusing the operations from Ida's code here, but of course TPs and intervals are ignored.
-test_plan1 :: [UpdateOperation]
-test_plan1 = [ChangeOperation (TP 0) (RemoveFeature (FeatureID "fid 1"))]
-
--- TODO: MOAR plans!
-
-fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
-fold_and_test im = foldl (\(i,m) op -> let step = (mkOp op) m in if prop_wf False step then (i+1, step) else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
-
-test_exe1 :: FM
-test_exe1 = foldl (\m op -> mkOp op $ m) test_fm1 test_plan1
-
-exampleWithoutTP :: [UpdateOperation]
-exampleWithoutTP = error "TODO: translate ExampleEvolutionPlan without timepoints"
-
-myReallyLongPlan :: FeatureID -> [UpdateOperation]
-myReallyLongPlan rfid = AddOperation (Validity (TP 0) Forever) (AddGroup (GroupID "gid") Or rfid) : [let fid = FeatureID (show i) in let name = show i in AddOperation (Validity (TP 0) Forever) (AddFeature fid name Optional (GroupID "gid")) | i <- [1..1000] ]
-
-measure createFM operations = do
-  print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
-  start <- getCPUTime
-  -- This would run the well-formedness check after every step:
-  -- let (_, result) = fold_and_test createFM operations
-  -- Run wf-check only at the end:
-  let result = foldl (\m op -> mkOp op $ m) createFM operations
-  -- Q: do we need the `rnf` if we're running the wf-check?
-  -- rnf result `seq` return ()
-  print $ prop_wf True result
-  end <- getCPUTime
-  let diff = (fromIntegral (end - start)) / (10^12)
-  printf "Computation time: %0.9f sec\n" (diff :: Double)
-
-mrlp_experiment = do
-  measure hm tailPlan
-  where
-    im@(FM rfid _) = test_fm1
-    hm = foldl (\m op -> mkOp op $ m) im headPlan
-    (headPlan, tailPlan) = splitAt 3 (myReallyLongPlan rfid)
-
-measure_tcs :: IntervalBasedFeatureModel -> [UpdateOperation] -> IO ()
-measure_tcs createFM operations = do
-  -- TODO? print $ "Initial model valid: " ++ show (prop_wf True createFM) -- sanity check
-  start <- getCPUTime
-  let result = foldl (\m op -> Apply.apply op m) ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel operations
-  -- TODO: this would require us to thread the typeclasses through Ida's code: rnf result `seq` return ()
-  -- Instead, let's just force printing the model:
-  print $ show $ length $ show result
-  -- show result `seq` return ()
-  end <- getCPUTime
-  let diff = (fromIntegral (end - start)) / (10^12)
-  printf "Computation time: %0.9f sec\n" (diff :: Double)
-
-mrlp_experiment_tcs = do
-  measure_tcs hm tailPlan
-  where
-    im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
-    hm = foldl (\m op -> Apply.apply op m) im headPlan
-    (headPlan, tailPlan) = splitAt 3 (myReallyLongPlan (FeatureID "feature:car"))
-
--- TODOs:
--- over .. (const foo) is probably a pattern.
+-- Experiments + Plans are now in Experimnts.hs
 

@@ -20,7 +20,9 @@ apply (AddOperation validity (AddFeature fid name fType parentID)) =
             & typeValidities %~ insert validity fType
             & parentValidities %~ insert validity parentID
       )
-    . insertEmptyFeature fid
+    . insertEmptyFeature
+    
+     fid
 apply (AddOperation validity (AddGroup gid gType parentID)) =
   over
     (featureValidities . ix parentID . childValidities)

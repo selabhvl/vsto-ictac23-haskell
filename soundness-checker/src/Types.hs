@@ -41,13 +41,13 @@ type ValidityMap a = IM.IntervalMap Validity a
 data TimePoint
   = TP Int
   | Forever
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 data Validity = Validity
   { _start :: TimePoint
   , _end :: TimePoint
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 -- Intervals are half-closed [x, y) -- left-inclusive, right-exclusive
 instance IM.Interval Validity TimePoint where
@@ -64,7 +64,7 @@ data IntervalBasedFeatureModel = IntervalBasedFeatureModel
   , _featureValidities :: FeatureValidities
   , _groupValidities :: GroupValidities
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 type NameValidities = M.Map Name (ValidityMap FeatureID)
 type FeatureValidities = M.Map FeatureID FeatureValidity
@@ -77,7 +77,7 @@ data FeatureValidity = FeatureValidity
   , _parentValidities :: ValidityMap GroupID
   , _childValidities :: ValidityMap (S.Set GroupID)
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 data GroupValidity = GroupValidity
   { _existenceValidities :: ValidityMap ()
@@ -85,14 +85,14 @@ data GroupValidity = GroupValidity
   , _parentValidities :: ValidityMap FeatureID
   , _childValidities :: ValidityMap (S.Set FeatureID)
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 ------------------------
 --   FEATURE MODELS   --
 ------------------------
 
 newtype FeatureModel = FeatureModel {_rootFeature :: Feature}
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 type TreeSequence = [(TimePoint, FeatureModel)]
 
@@ -101,7 +101,7 @@ data EvolutionPlan = EvolutionPlan
   , _initialTime :: TimePoint
   , _operations :: [UpdateOperation]
   }
-  deriving (Show)
+  deriving (Show, Generic, NFData)
 
 data Feature = Feature
   { _featureID :: FeatureID
@@ -109,24 +109,24 @@ data Feature = Feature
   , _varType :: FeatureType
   , _childGroups :: [Group]
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 data Group = Group
   { _groupID :: GroupID
   , _varType :: GroupType
   , _childFeatures :: [Feature]
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 data UpdateOperation
   = AddOperation Validity AddOperation
   | ChangeOperation TimePoint ChangeOperation
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 data AddOperation
   = AddFeature FeatureID Name FeatureType GroupID
   | AddGroup GroupID GroupType FeatureID
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 data ChangeOperation
   = RemoveFeature FeatureID
@@ -136,7 +136,7 @@ data ChangeOperation
   | ChangeFeatureType FeatureID FeatureType
   | ChangeGroupType GroupID GroupType
   | ChangeFeatureName FeatureID Name
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 --------------------
 -- Error Messages --
