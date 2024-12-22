@@ -10,6 +10,7 @@ import Text.Printf
 import qualified Data.Map as M
 import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
+-- Or import Maude2 here:
 import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf)
 
 import qualified Apply
@@ -477,14 +478,16 @@ mrlp_experiment_tcs plan =
     hm = foldl (flip Apply.apply) im headPlan
     (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "feature:car"))
 
-allPlans = [flatPlan, shallowHierarchyPlan,
+allPlans :: [(String, FeatureID -> [UpdateOperation])]
+allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
             -- FAILS: hierarchyPlan,
-            balancedPlan1, linearHierarchyPlan, gridHierarchyPlan, balancedPlan]
+            ("balancedPlan1",balancedPlan1), ("linearHierarchyPlan", linearHierarchyPlan), ("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)]
 
+all_experiments :: IO ()
 all_experiments = do
-  res <- mapM (\p -> do
+  res <- mapM (\(n,p) -> do
     maude <- mrlp_experiment p
     fmep <- mrlp_experiment_tcs p
-    return (maude, fmep)
+    return (n, maude, fmep)
    ) allPlans
   print res
