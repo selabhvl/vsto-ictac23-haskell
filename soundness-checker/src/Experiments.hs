@@ -20,14 +20,13 @@ import Test.QuickCheck
 import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
 import Types (IntervalBasedFeatureModel)
-import Maude (FM(..), mkOp) -- Import FM, mkOp, and test_fm1 for reuse.
 import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf)
 
 import qualified Apply
 import qualified ExampleIntervalBasedFeatureModel
 
 test_fm1 :: FM
-test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = []}
+test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = mempty}
   where
     me = FeatureID "fid 1"
 fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
