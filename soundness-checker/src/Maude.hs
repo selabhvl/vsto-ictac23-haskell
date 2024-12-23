@@ -209,17 +209,17 @@ updateParents :: FT -> [FeatureID] -> FeatureID -> FT
 -- lookup >>= adjust -> probably not efficient, but survivable
 updateParents ft fs newParent = foldr (\fid acc -> maybe (error $ "Feature doesn't exist: " ++ show fid) (\_f-> M.adjust (over parentID (const (Just newParent))) fid acc) (M.lookup fid ft) ) ft fs
 
-mkOp :: UpdateOperation -> (FM -> FM)
-mkOp (ChangeOperation (TP 0) (RemoveFeature fid)) = \m -> removeFeature m fid
-mkOp (ChangeOperation (TP 0) (RemoveGroup gid)) = \m -> removeGroup m gid
-mkOp (ChangeOperation (TP 0) (MoveFeature fid gid)) = \m -> moveFeature m (fid, gid)
-mkOp (ChangeOperation (TP 0) (MoveGroup gid fid)) = \m -> moveGroup m (gid, fid)
-mkOp (ChangeOperation (TP 0) (ChangeFeatureType fid fType)) = \m -> changeFeatureVariationType m (fid, fType)
-mkOp (ChangeOperation (TP 0) (ChangeGroupType gid gType)) = \m -> changeGroupVariationType m (gid, gType)
-mkOp (ChangeOperation (TP 0) (ChangeFeatureName fid name)) = \m -> renameFeature m (fid, name)
-mkOp (AddOperation _ (AddFeature fid name fType gid)) = \m -> addFeature m (fid,name,gid,fType)
-mkOp (AddOperation _ (AddGroup gid gType fid)) = \m -> addGroup m (fid,gid,gType)
-mkOp _ = error "TP must be 0, we're not using it!"
+mkOp :: FM -> UpdateOperation -> FM
+mkOp m (ChangeOperation (TP 0) (RemoveFeature fid)) = removeFeature m fid
+mkOp m (ChangeOperation (TP 0) (RemoveGroup gid)) = removeGroup m gid
+mkOp m (ChangeOperation (TP 0) (MoveFeature fid gid)) = moveFeature m (fid, gid)
+mkOp m (ChangeOperation (TP 0) (MoveGroup gid fid)) = moveGroup m (gid, fid)
+mkOp m (ChangeOperation (TP 0) (ChangeFeatureType fid fType)) = changeFeatureVariationType m (fid, fType)
+mkOp m (ChangeOperation (TP 0) (ChangeGroupType gid gType)) = changeGroupVariationType m (gid, gType)
+mkOp m (ChangeOperation (TP 0) (ChangeFeatureName fid name)) = renameFeature m (fid, name)
+mkOp m (AddOperation _ (AddFeature fid name fType gid)) = addFeature m (fid,name,gid,fType)
+mkOp m (AddOperation _ (AddGroup gid gType fid)) = addGroup m (fid,gid,gType)
+mkOp _ _ = error "TP must be 0, we're not using it!"
 
 featureModelToFM :: FeatureModel -> FM
 featureModelToFM _ = error "TODO: Translation from Ida's iv-based plans to the flat one here not yet implemented!"

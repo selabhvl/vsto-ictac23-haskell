@@ -3,23 +3,13 @@
 module Experiments where
 
 
-import GHC.Generics (Generic)
-import Control.DeepSeq (NFData)
 import Control.DeepSeq
 import System.CPUTime
 import Text.Printf
 
-import Control.Lens
-import Control.Monad (liftM)
-import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
-import Data.List
-import Data.Maybe
-import Data.Tuple.Utils
-import Test.QuickCheck
 import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
-import Types (IntervalBasedFeatureModel)
 import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf)
 
 import qualified Apply
@@ -29,11 +19,10 @@ test_fm1 :: FM
 test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = mempty}
   where
     me = FeatureID "fid 1"
+
 fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
-fold_and_test im = foldl (\(i,m) op -> let step = (mkOp op) m in if prop_wf False step then (i+1, step) 
+fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False step then (i+1, step) 
                                                                   else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
-
-
 
 
 flatPlan :: FeatureID -> [UpdateOperation]
@@ -444,43 +433,44 @@ balancedPlan rfid =
   | i <- [1..readdFeatures] ]
 
 
-measure :: FM -> [UpdateOperation] -> IO ()
-measure createFM operations = do
+-- measure :: FM -> [UpdateOperation] -> IO ()
+measure createFM apply_op check_op operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
   start <- getCPUTime
   
-  let result = foldl (\m op -> mkOp op m) createFM operations
+  let result = foldl apply_op createFM operations
+  -- We deepSeq here, since we shouldn't rely on check_op forcing evaluation.
+  -- TODO: deal with failing FMEP-plan here.
   rnf result `seq` return () -- Ensure full evaluation of the result
-  print $ prop_wf True result
+  t_exe <- getCPUTime -- for future use
+  let check_result = check_op result
+  print check_result
   end <- getCPUTime
   let diff = (fromIntegral (end - start)) / (10^12)
-  printf "Computation time: %0.9f sec\n" (diff :: Double)
+  let diff_plan = (fromIntegral (t_exe - start)) / (10^12)
+  let diff_check = (fromIntegral (end - t_exe)) / (10^12)
+  printf "Computation time: %0.6f sec (plan: %0.6f wf-check: %0.6f)\n" (diff :: Double) (diff_plan :: Double) (diff_check :: Double)
+  -- This will allow us to collect multiple test-runs easily:
+  return (diff_plan, diff_check, check_result)
 
 
-
+mrlp_experiment :: IO ()
 mrlp_experiment = do
-  measure hm tailPlan
+  -- Use `False` in production since a) we need the time, and b) should only plug in plans for which we know the result.
+  measure hm mkOp (prop_wf False) tailPlan
+  return ()
   where
     im@(FM rfid _) = test_fm1
-    hm = foldl (\m op -> mkOp op m) im headPlan
+    hm = foldl mkOp im headPlan
     (headPlan, tailPlan) = splitAt 3 (balancedPlan rfid)
 
-measure_tcs :: IntervalBasedFeatureModel -> [UpdateOperation] -> IO ()
-measure_tcs createFM operations = do
-  putStrLn $ "Number of operations: " ++ show (length operations)
-  start <- getCPUTime
-  let result = foldl (\m op -> let m' = Apply.apply op m in m' `seq` m') ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel operations
-  rnf result `seq` return ()
-  end <- getCPUTime
-  let diff = (fromIntegral (end - start)) / (10^12)
-  printf "Computation time: %0.9f sec\n" (diff :: Double)
-
-
+mrlp_experiment_tcs :: IO ()
 mrlp_experiment_tcs = do
-  measure_tcs hm tailPlan
+  measure hm (flip Apply.apply) (const "explicit wf-check not needed") tailPlan
+  return ()
   where
     im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
-    hm = foldl (\m op -> Apply.apply op m) im headPlan
+    hm = foldl (flip Apply.apply) im headPlan
     (headPlan, tailPlan) = splitAt 3 (balancedPlan (FeatureID "feature:car"))
 
 -- PLANS:
