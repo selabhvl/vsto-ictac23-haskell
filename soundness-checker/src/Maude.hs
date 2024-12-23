@@ -19,6 +19,7 @@ import Control.Monad (liftM)
 import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
 import Data.List
+import Data.Containers.ListUtils (nubOrd)
 import Data.Maybe
 import Data.Tuple.Utils
 import Test.QuickCheck
@@ -261,8 +262,7 @@ allGroups :: FM -> [Group]
 allGroups (FM rfid ft) = concatMap _childGroups $ M.elems ft
 
 noDupes :: Ord a => [a] -> Bool
-noDupes xs = nub xs == xs
--- TODO: use nubOrd
+noDupes xs = nubOrd xs == xs
 
 ----- QuickCheck
 
