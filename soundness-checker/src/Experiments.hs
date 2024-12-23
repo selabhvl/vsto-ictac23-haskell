@@ -459,31 +459,32 @@ measure createFM apply_op check_op ds_plan operations = do
   return (diff_plan, diff_check, check_result)
 
 
-mrlp_experiment :: IO ()
-mrlp_experiment = do
+-- mrlp_experiment :: IO ()
+mrlp_experiment plan =
   -- Use `False` in production since a) we need the time, and b) should only plug in plans for which we know the result.
   measure hm mkOp (prop_wf False) True tailPlan
-  return ()
   where
     im@(FM rfid _) = test_fm1
     hm = foldl mkOp im headPlan
-    (headPlan, tailPlan) = splitAt 3 (balancedPlan rfid)
+    (headPlan, tailPlan) = splitAt 3 (plan rfid)
 
-mrlp_experiment_tcs :: IO ()
-mrlp_experiment_tcs = do
+-- mrlp_experiment_tcs :: IO ()
+mrlp_experiment_tcs plan =
   measure hm (flip Apply.apply) (const "explicit wf-check not needed") True tailPlan
-  return ()
   where
+    -- TODO: pick right initial model
     im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
     hm = foldl (flip Apply.apply) im headPlan
-    (headPlan, tailPlan) = splitAt 3 (balancedPlan (FeatureID "feature:car"))
+    (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "feature:car"))
 
--- PLANS:
+allPlans = [flatPlan, shallowHierarchyPlan,
+            -- FAILS: hierarchyPlan,
+            balancedPlan1, linearHierarchyPlan, gridHierarchyPlan, balancedPlan]
 
--- flatPlan 
--- shallowHierarchyPlan 
--- hierarchyPlan 
--- balancedPlan1 
--- linearHierarchyPlan 
--- gridHierarchyPlan 
--- balancedPlan
+all_experiments = do
+  res <- mapM (\p -> do
+    maude <- mrlp_experiment p
+    fmep <- mrlp_experiment_tcs p
+    return (maude, fmep)
+   ) allPlans
+  print res
