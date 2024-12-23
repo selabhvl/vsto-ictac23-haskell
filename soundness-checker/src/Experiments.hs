@@ -449,8 +449,9 @@ measure createFM operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
   start <- getCPUTime
   
-  let result = foldl (\m op -> let m' = mkOp op m in m' `seq` m') createFM operations
+  let result = foldl (\m op -> mkOp op m) createFM operations
   rnf result `seq` return () -- Ensure full evaluation of the result
+  print $ prop_wf True result
   end <- getCPUTime
   let diff = (fromIntegral (end - start)) / (10^12)
   printf "Computation time: %0.9f sec\n" (diff :: Double)
@@ -461,7 +462,7 @@ mrlp_experiment = do
   measure hm tailPlan
   where
     im@(FM rfid _) = test_fm1
-    hm = foldl (\m op -> mkOp op $ m) im headPlan
+    hm = foldl (\m op -> mkOp op m) im headPlan
     (headPlan, tailPlan) = splitAt 3 (balancedPlan rfid)
 
 measure_tcs :: IntervalBasedFeatureModel -> [UpdateOperation] -> IO ()
