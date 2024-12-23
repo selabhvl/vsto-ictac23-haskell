@@ -434,14 +434,19 @@ balancedPlan rfid =
 
 
 -- measure :: FM -> [UpdateOperation] -> IO ()
-measure createFM apply_op check_op operations = do
+measure createFM apply_op check_op ds_plan operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
   start <- getCPUTime
   
   let result = foldl apply_op createFM operations
   -- We deepSeq here, since we shouldn't rely on check_op forcing evaluation.
+  -- TODO: if we rely on check_op to deepSeq, there'd be no need to do it here.
+  --       Currently, it looks like the Maude-version spends 50/50 here, or 0/100 w/o deepSeq.
   -- TODO: deal with failing FMEP-plan here.
-  rnf result `seq` return () -- Ensure full evaluation of the result
+  if ds_plan then do
+    rnf result `seq` return () -- Ensure full evaluation of the result
+  else do
+    return ()
   t_exe <- getCPUTime -- for future use
   let check_result = check_op result
   print check_result
@@ -457,7 +462,7 @@ measure createFM apply_op check_op operations = do
 mrlp_experiment :: IO ()
 mrlp_experiment = do
   -- Use `False` in production since a) we need the time, and b) should only plug in plans for which we know the result.
-  measure hm mkOp (prop_wf False) tailPlan
+  measure hm mkOp (prop_wf False) True tailPlan
   return ()
   where
     im@(FM rfid _) = test_fm1
@@ -466,7 +471,7 @@ mrlp_experiment = do
 
 mrlp_experiment_tcs :: IO ()
 mrlp_experiment_tcs = do
-  measure hm (flip Apply.apply) (const "explicit wf-check not needed") tailPlan
+  measure hm (flip Apply.apply) (const "explicit wf-check not needed") True tailPlan
   return ()
   where
     im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
