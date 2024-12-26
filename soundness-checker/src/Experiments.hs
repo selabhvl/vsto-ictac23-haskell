@@ -1,7 +1,4 @@
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
-
 module Experiments where
-
 
 import Control.DeepSeq
 import System.CPUTime
@@ -15,6 +12,9 @@ import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _fea
 
 import qualified Apply
 import qualified ExampleIntervalBasedFeatureModel
+
+import Criterion.Main
+import Criterion.Types hiding (measure)
 
 test_fm1 :: FM
 test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = mempty}
@@ -471,7 +471,7 @@ mrlp_experiment plan =
 
 -- mrlp_experiment_tcs :: IO ()
 mrlp_experiment_tcs plan =
-  measure hm (flip Apply.apply) (const "explicit wf-check not needed") True tailPlan
+  measure hm (flip Apply.apply) (const True) True tailPlan
   where
     -- TODO: pick right initial model
     im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
@@ -491,3 +491,11 @@ all_experiments = do
     return (n, maude, fmep)
    ) allPlans
   print res
+
+crit_config :: Config
+crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "report.html" }
+
+do_the_experiment :: IO ()
+do_the_experiment = defaultMainWith crit_config [
+                     bgroup "Maude" [bench n (whnfIO $ mrlp_experiment p) | (n,p) <- allPlans],
+                     bgroup "FMEP " [bench n (whnfIO $ mrlp_experiment_tcs p) | (n,p) <- allPlans]]

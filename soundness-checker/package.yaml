@@ -24,6 +24,7 @@ dependencies:
 - aeson
 - cond
 - containers
+- criterion
 - deepseq
 - lens
 - lens-aeson
