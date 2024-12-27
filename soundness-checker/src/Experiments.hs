@@ -435,7 +435,7 @@ balancedPlan rfid =
 
 
 -- measure :: FM -> [UpdateOperation] -> IO ()
-measure createFM apply_op check_op ds_plan operations = do
+measure ds_plan check_op apply_op createFM operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
   start <- getCPUTime
   
@@ -461,17 +461,17 @@ measure createFM apply_op check_op ds_plan operations = do
 
 
 -- mrlp_experiment :: IO ()
-mrlp_experiment plan =
+mrlp_experiment measure plan =
   -- Use `False` in production since a) we need the time, and b) should only plug in plans for which we know the result.
-  measure hm mkOp (prop_wf False) True tailPlan
+  measure True (prop_wf False) mkOp hm tailPlan
   where
     im@(FM rfid _) = test_fm1
     hm = foldl mkOp im headPlan
     (headPlan, tailPlan) = splitAt 3 (plan rfid)
 
 -- mrlp_experiment_tcs :: IO ()
-mrlp_experiment_tcs plan =
-  measure hm (flip Apply.apply) (const True) True tailPlan
+mrlp_experiment_tcs measure plan =
+  measure True (const True) (flip Apply.apply) hm tailPlan
   where
     -- TODO: pick right initial model
     im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
@@ -486,16 +486,16 @@ allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan)
 all_experiments :: IO ()
 all_experiments = do
   res <- mapM (\(n,p) -> do
-    maude <- mrlp_experiment p
-    fmep <- mrlp_experiment_tcs p
+    maude <- mrlp_experiment measure p
+    fmep <- mrlp_experiment_tcs measure p
     return (n, maude, fmep)
    ) allPlans
   print res
 
 crit_config :: Config
-crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "report.html" }
+crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "report.html", timeLimit = 1 }
 
 do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
-                     bgroup "Maude" [bench n (whnfIO $ mrlp_experiment p) | (n,p) <- allPlans],
-                     bgroup "FMEP " [bench n (whnfIO $ mrlp_experiment_tcs p) | (n,p) <- allPlans]]
+                     bgroup "Maude" [bench n (whnf (mrlp_experiment (\_ _ -> foldl)) p) | (n,p) <- allPlans],
+                     bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl)) p) | (n,p) <- allPlans]]
