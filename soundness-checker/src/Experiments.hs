@@ -1,7 +1,9 @@
 module Experiments where
 
 import Control.DeepSeq
+import Data.List
 import System.CPUTime
+import System.IO
 import Text.Printf
 
 import qualified Data.Map as M
@@ -485,12 +487,20 @@ allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan)
 
 all_experiments :: IO ()
 all_experiments = do
-  res <- mapM (\(n,p) -> do
-    maude <- mrlp_experiment measure p
-    fmep <- mrlp_experiment_tcs measure p
-    return (n, maude, fmep)
-   ) allPlans
-  print res
+  let filename = "data.csv"
+  let iters = 3
+  hPutStrLn stderr $ "Writing CSV to: " ++ filename ++ ". Iterations: " ++ show iters
+  withFile filename WriteMode (\h -> do
+    hPutStrLn h "Name,t_exe (Maude),t_check (Maude),wf (Maude),t_exe (FMEP)"
+    res <- mapM (\(n,p) -> do
+      maude@(tpm, tcm, trm) <- mrlp_experiment measure p
+      fmep@(tpf, tcf, trf) <- mrlp_experiment_tcs measure p
+      hPrintf h "%s,%0.6f,%0.6f,%s,%0.6f\n" n (tpm :: Double) (tcm :: Double) (show trm) (tpf :: Double) -- ignored: (tcf :: Double)  (show trf)
+      return (n, maude, fmep)
+     ) (concat $ replicate iters allPlans)
+    print res
+   )
+  
 
 crit_config :: Config
 crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "report.html", timeLimit = 1 }
