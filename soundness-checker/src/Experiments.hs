@@ -75,8 +75,12 @@ flatPlan rfid =
   | i <- [1,3..readdFeatures] ] ++  -- Rename every 2nd re-added feature
 
   -- Change the type of features
+   -- Step 9: Change the type of features to Mandatory, but only in the AND group
   [ ChangeOperation (TP 0) (ChangeFeatureType (FeatureID $ "fid_" ++ show i) Mandatory)
-  | i <- [4,8..totalFeatures], i `mod` 10 /= 0 ] ++  
+  | i <- [4,8..totalFeatures],
+    i `mod` 10 /= 0,                  -- Exclude removed features
+    i `mod` 5 == 0 ] ++               -- Only include features moved to the AND group
+  
   [ ChangeOperation (TP 0) (ChangeFeatureType (FeatureID $ "fid_readd_" ++ show i) Optional)
   | i <- [2,4..readdFeatures] ] 
 
@@ -110,9 +114,12 @@ shallowHierarchyPlan rfid =
   [ ChangeOperation (TP 0) (ChangeFeatureName (FeatureID $ "fid_" ++ show i) 
                                              ("RenamedFeature" ++ show i))
   | i <- [7, 7 + totalGroups .. (7 + 7 * renamedFeatures)], i <= totalFeatures, i `mod` 10 /= 0 ] ++ -- Skip removed features
-
   [ ChangeOperation (TP 0) (ChangeFeatureType (FeatureID $ "fid_" ++ show i) Mandatory)
-  | i <- [4, 4 + totalGroups .. (4 + 4 * changedTypes)], i <= totalFeatures, i `mod` 10 /= 0 ] -- Skip removed features
+  | i <- [4, 4 + totalGroups .. (4 + totalGroups * changedTypes)],
+    i <= totalFeatures,
+    i `mod` 10 /= 0,
+    let groupIndex = (i `mod` totalGroups) + 1
+    in groupIndex > totalGroups `div` 2 ]
 
 hierarchyPlan :: FeatureID -> [UpdateOperation]
 hierarchyPlan rfid =
@@ -164,7 +171,7 @@ balancedPlan1 :: FeatureID -> [UpdateOperation]
 balancedPlan1 rfid =
   let 
       -- Reduced counts for root level groups features
-      totalRootGroups = 20   
+      totalRootGroups = 20  
       totalRootFeatures = 500  
       subGroupsPerFeature = 4  
       featuresPerSubGroup = 5  
@@ -176,9 +183,11 @@ balancedPlan1 rfid =
 
       makeFeatureID i = FeatureID $ "fid_" ++ show i
       makeGroupID i = GroupID $ "gid_" ++ show i
-
       rootGroupOperations =
-        [ AddOperation (Validity (TP 0) Forever) (AddGroup (makeGroupID g) Or rfid)
+        [ AddOperation (Validity (TP 0) Forever) 
+            (AddGroup (makeGroupID g) 
+                      (if g <= totalRootGroups `div` 2 then Or else And) 
+                      rfid)
         | g <- [1..totalRootGroups] ]
 
       -- features distributed across root groups
@@ -229,9 +238,10 @@ balancedPlan1 rfid =
         | i <- [7, 17..(7 + renamedFeatures)], i `mod` 10 /= 0 ] 
 
       changeTypeOperations =
-        take 200 [ ChangeOperation (TP 0) (ChangeFeatureType (makeFeatureID i) Mandatory)
-        | i <- [4, 14..(4 + changedTypes)], i `mod` 10 /= 0 ] -- Skip removed features
-
+        [ ChangeOperation (TP 0) (ChangeFeatureType (makeFeatureID i) Optional)
+        | i <- [1..totalRootFeatures], 
+          (i `mod` totalRootGroups) + 1 > totalRootGroups `div` 2, -- Only for AND groups
+          i `mod` 10 /= 0 ] -- Skip some features for variation
       readdOperations =
         take 200 [ AddOperation (Validity (TP 0) Forever) 
             (AddFeature (FeatureID $ "fid_readd_" ++ show i) 
@@ -306,7 +316,6 @@ linearHierarchyPlan rfid =
     addFeatureOperations ++
     moveOperations ++
     renameOperations ++
-    changeTypeOperations ++
     readdOperations
 
 
@@ -324,12 +333,13 @@ gridHierarchyPlan rfid =
 
       makeFeatureID g f = FeatureID $ "fid_" ++ show g ++ "_" ++ show f
       makeGroupID g = GroupID $ "gid_" ++ show g
-
+      
       rootGroupOperations =
         [ AddOperation (Validity (TP 0) Forever)
-            (AddGroup (makeGroupID g) Or rfid)
+        (AddGroup (makeGroupID g)
+                      (if g <= totalGroups `div` 2 then Or else And)
+                      rfid) -- Correct placement of `rfid` within AddGroup
         | g <- [1..totalGroups] ]
-
       -- add features to each group
       groupFeatureOperations =
         concat
@@ -365,12 +375,11 @@ gridHierarchyPlan rfid =
             f `mod` 10 /= 0 ] 
 
       changeTypeOperations =
-        take changedTypes
-          [ ChangeOperation (TP 0) 
-              (ChangeFeatureType (makeFeatureID g f) Mandatory)
-          | g <- [1..totalGroups],
-            f <- [1..featuresPerGroup],
-            f `mod` 10 /= 0 ] 
+        [ ChangeOperation (TP 0) 
+              (ChangeFeatureType (makeFeatureID g f) Optional)
+        | g <- [totalGroups `div` 2 + 1..totalGroups], -- Only for AND groups
+          f <- [1..featuresPerGroup],
+          f `mod` 5 /= 0 ] 
 
       -- Re-add removed features (limited to `readdFeatures`)
       readdOperations =
@@ -434,8 +443,6 @@ balancedPlan rfid =
                   Optional 
                   (GroupID $ "gid_" ++ show ((i `mod` totalGroups) + 1)))
   | i <- [1..readdFeatures] ]
-
-
 -- measure :: FM -> [UpdateOperation] -> IO ()
 measure ds_plan check_op apply_op createFM operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
