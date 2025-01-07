@@ -1,7 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
 module Experiments where
-
+import System.IO (writeFile)
 import Control.DeepSeq
 import Data.Either
 import Data.Maybe
@@ -11,11 +11,11 @@ import qualified Data.Map as M
 import System.CPUTime
 import System.IO
 import Text.Printf
-
+import System.IO (readFile)
 import qualified Types as T (Feature(..), Group(..))
 import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel, IntervalBasedFeatureModel(..))
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
-
+import System.IO (readFile)
 -- Or import Maude2 here:
 import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf)
 
@@ -601,3 +601,29 @@ tests_equal = TestList [TestCase (assertEqual "3000" (fst r3000) (snd r3000))
     r3000 = check_equal_models linearHierarchyPlan 3000
     r3001 = check_equal_models linearHierarchyPlan 3001
 
+-- to write models ghci> write_models_to_files linearHierarchyPlan 3000
+-- ghci> write_models_to_files linearHierarchyPlan 3001
+write_models_to_files :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
+write_models_to_files plan idx = do
+  let models = make_models plan
+  let maudeModel = (!!) (fst models) idx
+  let tcsModel   = (!!) (snd models) idx
+
+  -- Write Maude model to a file
+  writeFile ("maude_model_step_" ++ show idx ++ ".txt") (show $ convert_fm_to_featuremodel maudeModel)
+
+  -- Write TCS model to a file
+  writeFile ("tcs_model_step_" ++ show idx ++ ".txt") (show tcsModel)
+
+  putStrLn $ "Models written to files for step " ++ show idx ++ "."
+
+-- compare_files "maude_model_step_3001.txt" "tcs_model_step_3001.txt"
+-- compare_files "maude_model_step_3000.txt" "tcs_model_step_3000.txt"
+compare_files :: FilePath -> FilePath -> IO ()
+compare_files file1 file2 = do
+  content1 <- readFile file1
+  content2 <- readFile file2
+  if content1 == content2
+    then putStrLn "Files are identical."
+    else putStrLn "Files differ."
+    
