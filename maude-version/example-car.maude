@@ -1,6 +1,6 @@
 load featuremodel.maude
 
-mod DWINPUT is including FEATUREMODEL-CHECKER . protecting STRING + NAT .
+mod DWINPUT is including FEATURE-MODEL + FEATURE-MODEL-TIME . protecting STRING + NAT .
   subsorts String < FeatureID GroupID Name .
   subsort Nat < TimePoint .
   op model : -> FeatureModel .
