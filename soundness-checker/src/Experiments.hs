@@ -1,7 +1,7 @@
 module Experiments where
 
 import Control.DeepSeq
-import Data.List
+import Data.Either
 import System.CPUTime
 import System.IO
 import Text.Printf
@@ -14,6 +14,7 @@ import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _fea
 
 import qualified Apply
 import qualified ExampleIntervalBasedFeatureModel
+import Program (validateAndApply)
 
 import Criterion.Main
 import Criterion.Types hiding (measure)
@@ -443,6 +444,7 @@ balancedPlan rfid =
                   Optional 
                   (GroupID $ "gid_" ++ show ((i `mod` totalGroups) + 1)))
   | i <- [1..readdFeatures] ]
+
 -- measure :: FM -> [UpdateOperation] -> IO ()
 measure ds_plan check_op apply_op createFM operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
@@ -457,7 +459,8 @@ measure ds_plan check_op apply_op createFM operations = do
     rnf result `seq` return () -- Ensure full evaluation of the result
   else do
     return ()
-  t_exe <- getCPUTime -- for future use
+  t_exe <- getCPUTime
+  -- for FMEP, we will use a NOP here, Maude will validate the resulting plan:
   let check_result = check_op result
   print check_result
   end <- getCPUTime
@@ -480,26 +483,30 @@ mrlp_experiment measure plan =
 
 -- mrlp_experiment_tcs :: IO ()
 mrlp_experiment_tcs measure plan =
-  measure True (const True) (flip Apply.apply) hm tailPlan
+  measure True (not . fst) (foldOp) (False, hm) tailPlan
   where
     -- TODO: pick right initial model
     im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
     hm = foldl (flip Apply.apply) im headPlan
     (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "feature:car"))
+    foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
 allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
-            -- FAILS: hierarchyPlan,
-            ("balancedPlan1",balancedPlan1), ("linearHierarchyPlan", linearHierarchyPlan), ("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)]
+            -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
+            ("balancedPlan1",balancedPlan1),
+            -- ("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP @VS
+            ("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)]
 
 all_experiments :: IO ()
 all_experiments = do
   let filename = "data.csv"
-  let iters = 3
+  let iters = 3 -- <-- adjust here
   hPutStrLn stderr $ "Writing CSV to: " ++ filename ++ ". Iterations: " ++ show iters
   withFile filename WriteMode (\h -> do
     hPutStrLn h "Name,t_exe (Maude),t_check (Maude),wf (Maude),t_exe (FMEP)"
     res <- mapM (\(n,p) -> do
+      hPutStrLn stderr $ "Plan: " ++ n
       maude@(tpm, tcm, trm) <- mrlp_experiment measure p
       fmep@(tpf, tcf, trf) <- mrlp_experiment_tcs measure p
       hPrintf h "%s,%0.6f,%0.6f,%s,%0.6f\n" n (tpm :: Double) (tcm :: Double) (show trm) (tpf :: Double) -- ignored: (tcf :: Double)  (show trf)
