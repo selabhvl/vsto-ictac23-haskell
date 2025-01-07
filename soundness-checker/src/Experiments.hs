@@ -1,28 +1,62 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+
 module Experiments where
 
 import Control.DeepSeq
 import Data.Either
+import Data.Maybe
+import Data.Tuple.Utils
+import qualified Data.IntervalMap.Generic.Strict as IM
+import qualified Data.Map as M
 import System.CPUTime
 import System.IO
 import Text.Printf
 
-import qualified Data.Map as M
-import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
-import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
+import qualified Types as T (Feature(..), Group(..))
+import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel, IntervalBasedFeatureModel(..))
+import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
+
 -- Or import Maude2 here:
 import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf)
 
 import qualified Apply
-import qualified ExampleIntervalBasedFeatureModel
 import Program (validateAndApply)
+import TreeSequence (treeAt)
+import ExampleIntervalBasedFeatureModel
+
+import Test.HUnit
 
 import Criterion.Main
 import Criterion.Types hiding (measure)
 
+-- shared for all models:
+root_feature :: FeatureID
+root_feature = FeatureID "fid 1"
+
+-- Maude:
 test_fm1 :: FM
-test_fm1 = FM me $ M.singleton me $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = mempty}
-  where
-    me = FeatureID "fid 1"
+test_fm1 = FM root_feature $ M.singleton root_feature $ F { _name = "Test1", _parentID = Nothing, _featureType = Mandatory, _childGroups = mempty}
+
+-- FMEP:
+v :: TimePoint -> TimePoint -> Validity
+v = Validity
+
+(∞) :: TimePoint
+(∞) = Forever
+
+im :: [(Validity, a)] -> ValidityMap a
+im = IM.fromList
+
+test_ifm1 :: IntervalBasedFeatureModel
+test_ifm1 = IntervalBasedFeatureModel root_feature (M.fromList [("Test1", im [(Validity (TP 0) (∞), root_feature)])])
+                                                   (M.fromList [(root_feature, FeatureValidity
+              (im [(v (TP 0) (∞), ())])
+              (im [(v (TP 0) (∞), "Test1")])
+              (im [(v (TP 0) (∞), Mandatory)])
+              mempty
+              (im [])
+          )])
+                                                   (M.fromList [])
 
 fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
 fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False step then (i+1, step) 
@@ -485,10 +519,9 @@ mrlp_experiment measure plan =
 mrlp_experiment_tcs measure plan =
   measure True (not . fst) (foldOp) (False, hm) tailPlan
   where
-    -- TODO: pick right initial model
-    im = ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel
+    im = test_ifm1
     hm = foldl (flip Apply.apply) im headPlan
-    (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "feature:car"))
+    (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "fid 1"))
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
@@ -524,11 +557,47 @@ do_the_experiment = defaultMainWith crit_config [
                      bgroup "Maude" [bench n (whnf (mrlp_experiment (\_ _ -> foldl)) p) | (n,p) <- allPlans],
                      bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl)) p) | (n,p) <- allPlans]]
 
---- Debugging:
+-- Debugging:
+--
 test_fix_fmep_linearplan_working = fix_fmep_linearplan 3001
 test_fix_fmep_linearplan_broken = fix_fmep_linearplan 3002
-trouble_maker = last $ take 3002 $ linearHierarchyPlan  (FeatureID "feature:car")
+trouble_maker = last $ take 3002 $ linearHierarchyPlan root_feature
 
-fix_fmep_linearplan idx = foldl foldOp (0, False, ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel) $ take idx $ linearHierarchyPlan  (FeatureID "feature:car")
+fix_fmep_linearplan idx = foldl foldOp (0, False, test_ifm1) $ take idx $ linearHierarchyPlan root_feature
   where
     foldOp acc@(i, aborted, m) op = if aborted then acc else let result = validateAndApply op m in if isRight result then (i+1, False, fromRight m result) else (i+1, True, m)
+
+-- > runTestTT tests_debugging
+tests_debugging = TestList [TestCase (assertEqual "ok 3001" (snd3 test_fix_fmep_linearplan_working) False)
+                           ,TestCase (assertEqual "ok 3002" (snd3 test_fix_fmep_linearplan_broken) False)
+                           ]
+
+-- Sanity check, both modules producing identical intermediate models:
+--
+make_models plan = (fst maude, map ((flip treeAt) (TP 0)) $ fst tcs)
+  where
+    maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
+    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
+
+convert_fm_to_featuremodel (FM rootid ft) = FeatureModel (mkFeature ft rootid)
+
+mkFeature ft fid = T.Feature { _featureID = fid, T._name = _name f, _varType = _featureType f, _childGroups = map mkChildGroup (_childGroups f) }
+  where
+    f = fromJust $ M.lookup fid ft
+    mkChildGroup g = T.Group { T._groupID = _groupID g, _varType = _groupType g, T._childFeatures = map (mkFeature ft) (_childFeatures g) }
+
+check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
+   where
+     models = make_models plan
+     maude = (!!) (fst models) idx
+     tcs   = (!!) (snd models) idx
+
+-- > runTestTT tests_equal
+-- Granted, the output is not very helpful for such a large model
+tests_equal = TestList [TestCase (assertEqual "3000" (fst r3000) (snd r3000))
+                       ,TestCase (assertEqual "3001" (fst r3001) (snd r3001))
+                       ]
+  where
+    r3000 = check_equal_models linearHierarchyPlan 3000
+    r3001 = check_equal_models linearHierarchyPlan 3001
+
