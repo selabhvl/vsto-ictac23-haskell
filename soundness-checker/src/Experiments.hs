@@ -523,3 +523,12 @@ do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
                      bgroup "Maude" [bench n (whnf (mrlp_experiment (\_ _ -> foldl)) p) | (n,p) <- allPlans],
                      bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl)) p) | (n,p) <- allPlans]]
+
+--- Debugging:
+test_fix_fmep_linearplan_working = fix_fmep_linearplan 3001
+test_fix_fmep_linearplan_broken = fix_fmep_linearplan 3002
+trouble_maker = last $ take 3002 $ linearHierarchyPlan  (FeatureID "feature:car")
+
+fix_fmep_linearplan idx = foldl foldOp (0, False, ExampleIntervalBasedFeatureModel.exampleIntervalBasedFeatureModel) $ take idx $ linearHierarchyPlan  (FeatureID "feature:car")
+  where
+    foldOp acc@(i, aborted, m) op = if aborted then acc else let result = validateAndApply op m in if isRight result then (i+1, False, fromRight m result) else (i+1, True, m)
