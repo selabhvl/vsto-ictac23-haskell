@@ -63,6 +63,41 @@ fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
 fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False step then (i+1, step) 
                                                                   else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
 
+inspectRenameIssue :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
+inspectRenameIssue plan idx = do
+  let models = make_models plan
+  let maudeModelBefore = (!!) (fst models) (idx - 1)
+  let tcsModelBefore   = (!!) (snd models) (idx - 1)
+  let maudeModelAfter  = (!!) (fst models) idx
+  let tcsModelAfter    = (!!) (snd models) idx
+
+  putStrLn "=== Before Renaming ==="
+  putStrLn "Maude Model:"
+  print $ convert_fm_to_featuremodel maudeModelBefore
+  putStrLn "TCS Model:"
+  print tcsModelBefore
+
+  putStrLn "\n=== After Renaming ==="
+  putStrLn "Maude Model:"
+  print $ convert_fm_to_featuremodel maudeModelAfter
+  putStrLn "TCS Model:"
+  print tcsModelAfter
+
+smallFlatPlan :: FeatureID -> [UpdateOperation]
+smallFlatPlan rfid =
+  let groupID = GroupID "gid_root"
+      feature1 = FeatureID "fid_1"
+      feature2 = FeatureID "fid_2"
+  in
+  [ AddOperation (Validity (TP 0) Forever) (AddGroup groupID Or rfid) ] ++
+
+  [ AddOperation (Validity (TP 0) Forever) (AddFeature feature1 "Feature1" Optional groupID),
+    AddOperation (Validity (TP 0) Forever) (AddFeature feature2 "Feature2" Optional groupID) ] ++
+
+  [ ChangeOperation (TP 0) (ChangeFeatureName feature1 "RenamedddFeature1") ] ++
+  [ ChangeOperation (TP 0) (ChangeFeatureName feature2 "RenamedddFeature2") ]
+
+ 
 
 flatPlan :: FeatureID -> [UpdateOperation]
 flatPlan rfid =
@@ -81,6 +116,10 @@ flatPlan rfid =
                   groupID)
   | i <- [1..totalFeatures] ] ++
 
+  -- ename every 7th feature
+  [ ChangeOperation (TP 0) (ChangeFeatureName (FeatureID $ "fid_" ++ show i) 
+                                             ("RenamedFeature" ++ show i))
+  | i <- [7,14..totalFeatures], i `mod` 10 /= 0 ] ++
   -- Remove every 10th feature
   [ ChangeOperation (TP 0) (RemoveFeature (FeatureID $ "fid_" ++ show i))
   | i <- [10,20..totalFeatures] ] ++
@@ -91,11 +130,7 @@ flatPlan rfid =
   -- Step 4: Move every 5th feature to a secondary group
   [ ChangeOperation (TP 0) (MoveFeature (FeatureID $ "fid_" ++ show i) (GroupID "gid_moved"))
   | i <- [5,15..totalFeatures], i `mod` 10 /= 0 ] ++ -- Skip already removed features
-
-  -- ename every 7th feature
-  [ ChangeOperation (TP 0) (ChangeFeatureName (FeatureID $ "fid_" ++ show i) 
-                                             ("RenamedFeature" ++ show i))
-  | i <- [7,14..totalFeatures], i `mod` 10 /= 0 ] ++ -- Skip already removed features
+ -- Skip already removed features
 
   -- Add back removed features to the original group
   [ AddOperation (Validity (TP 0) Forever) 
@@ -526,11 +561,13 @@ mrlp_experiment_tcs measure plan =
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
-allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
+allPlans = [--("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
             -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
-            ("balancedPlan1",balancedPlan1),
-            ("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP w/validation @VS
-            ("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)]
+            ("smallFlatPlan",smallFlatPlan)
+           -- ("balancedPlan1",balancedPlan1),
+            --("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP w/validation @VS
+            --("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)
+            ]
 
 all_experiments :: IO ()
 all_experiments = do
@@ -601,10 +638,10 @@ tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
                        ,TestCase (myAssertEqual "4498" (fst r4498) (snd r4498))
                        ] ++ tcBisected)
   where
-    r3000 = check_equal_models linearHierarchyPlan 3000
-    r3001 = check_equal_models linearHierarchyPlan 3001
-    r4498 = check_equal_models linearHierarchyPlan 4498
-    models = make_models linearHierarchyPlan
+    r3000 = check_equal_models flatPlan 3000
+    r3001 = check_equal_models flatPlan 3001
+    r4498 = check_equal_models flatPlan 4498
+    models = make_models flatPlan
     tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (\(m,t) -> m /= t) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
 
 tests_equal_all_plans = TestList . concat $ [mkTrouble np | np <- allPlans ]
@@ -646,6 +683,8 @@ write_models_to_files plan idx = do
 
   putStrLn $ "Models written to files for step " ++ show idx ++ "."
 
+
+
 -- compare_files "maude_model_step_3001.txt" "tcs_model_step_3001.txt"
 -- compare_files "maude_model_step_3000.txt" "tcs_model_step_3000.txt"
 compare_files :: FilePath -> FilePath -> IO ()
@@ -661,4 +700,6 @@ save_models n = do
     withFile "tcs.txt" WriteMode (\h -> do hPutStrLn h (show (snd models)))
   where
      models = check_equal_models linearHierarchyPlan n
-    
+
+
+     
