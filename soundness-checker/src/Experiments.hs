@@ -65,23 +65,25 @@ fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False 
 
 inspectRenameIssue :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
 inspectRenameIssue plan idx = do
-  let models = make_models plan
+  let models = make_models' plan
   let maudeModelBefore = (!!) (fst models) (idx - 1)
   let tcsModelBefore   = (!!) (snd models) (idx - 1)
   let maudeModelAfter  = (!!) (fst models) idx
   let tcsModelAfter    = (!!) (snd models) idx
 
-  putStrLn "=== Before Renaming ==="
-  putStrLn "Maude Model:"
-  print $ convert_fm_to_featuremodel maudeModelBefore
-  putStrLn "TCS Model:"
-  print tcsModelBefore
+  putStrLn  "=== Before Renaming ==="
+  -- putStrLn "Maude Model:"
+  -- print $ convert_fm_to_featuremodel maudeModelBefore
+  -- putStrLn "TCS Model:"
+  putStrLn $ show tcsModelBefore
 
   putStrLn "\n=== After Renaming ==="
-  putStrLn "Maude Model:"
-  print $ convert_fm_to_featuremodel maudeModelAfter
-  putStrLn "TCS Model:"
-  print tcsModelAfter
+  -- putStrLn "Maude Model:"
+  -- print $ convert_fm_to_featuremodel maudeModelAfter
+  putStrLn "TCS Model (IBMF):"
+  putStrLn $ show tcsModelAfter
+  putStrLn "TCS after TreeAt:"
+  putStrLn $ show $ treeAt tcsModelAfter (TP 0)
 
 smallFlatPlan :: FeatureID -> [UpdateOperation]
 smallFlatPlan rfid =
@@ -613,6 +615,11 @@ tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fme
 -- Sanity check, both modules producing identical intermediate models:
 --
 make_models plan = (fst maude, map ((flip treeAt) (TP 0)) $ fst tcs)
+  where
+    maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
+    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
+
+make_models' plan = (fst maude, fst tcs)
   where
     maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
     tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
