@@ -3,6 +3,7 @@
 module Experiments where
 import System.IO (writeFile)
 import Control.DeepSeq
+import Control.Monad (unless)
 import Data.Either
 import Data.List.HT (takeUntil)
 import Data.Maybe
@@ -528,7 +529,7 @@ allPlans :: [(String, FeatureID -> [UpdateOperation])]
 allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
             -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
             ("balancedPlan1",balancedPlan1),
-            -- ("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP @VS
+            ("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP w/validation @VS
             ("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)]
 
 all_experiments :: IO ()
@@ -568,8 +569,8 @@ fix_fmep_linearplan idx = foldl foldOp (0, False, test_ifm1) $ take idx $ linear
     foldOp acc@(i, aborted, m) op = if aborted then acc else let result = validateAndApply op m in if isRight result then (i+1, False, fromRight m result) else (i+1, True, m)
 
 -- > runTestTT tests_debugging
-tests_debugging = TestList [TestCase (assertEqual "ok 3001" (snd3 test_fix_fmep_linearplan_working) False)
-                           ,TestCase (assertEqual "ok 3002" (snd3 test_fix_fmep_linearplan_broken) False)
+tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fmep_linearplan_working) False)
+                           ,TestCase (myAssertEqual "ok 3002" (snd3 test_fix_fmep_linearplan_broken) False)
                            ]
 
 -- Sanity check, both modules producing identical intermediate models:
@@ -595,20 +596,39 @@ check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
 
 -- > runTestTT tests_equal
 -- Granted, the output is not very helpful for such a large model when things break
-tests_equal = TestList [TestCase (assertEqual "3000" (fst r3000) (snd r3000))
-                       ,TestCase (assertEqual "3001" (fst r3001) (snd r3001))
-                       ,TestCase (assertEqual "4498" (fst r4498) (snd r4498))
-                       -- should really bisect here instead:
-                       ,TestCase (assertEqual ("first broken: " ++ show idx) (fst troubleMaker) (snd troubleMaker))
-                       ]
+tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
+                       ,TestCase (myAssertEqual "3001" (fst r3001) (snd r3001))
+                       ,TestCase (myAssertEqual "4498" (fst r4498) (snd r4498))
+                       ] ++ tcBisected)
   where
     r3000 = check_equal_models linearHierarchyPlan 3000
     r3001 = check_equal_models linearHierarchyPlan 3001
     r4498 = check_equal_models linearHierarchyPlan 4498
     models = make_models linearHierarchyPlan
-    mkTCs = zipWith (\maude tcs -> TestCase (assertEqual "nn" (convert_fm_to_featuremodel maude) tcs)) (fst models) (snd models)
-    diverge = takeUntil (uncurry (/=)) $ map (\(m,t) -> (convert_fm_to_featuremodel m, t)) $ zip (fst models) (snd models)
-    (troubleMaker, idx) = (last diverge, length diverge-1) -- We started with the initial model
+    tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (\(m,t) -> m /= t) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
+
+tests_equal_all_plans = TestList . concat $ [mkTrouble np | np <- allPlans ]
+
+mkTrouble (n,p) = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (n ++ "@" ++ show idx ++ " (of " ++ show (length $ p undefined) ++")") (fst tm) (snd tm))]) (bisectionGpt (uncurry (/=)) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
+  where
+   models = make_models p
+
+myAssertEqual preface expected actual = unless (actual == expected) (assertFailure preface)
+
+-- requires `pred` to be monotone on `xs` (?):
+-- Could be stingier.
+bisectionGpt _ [] = Nothing
+bisectionGpt pred sortedList = go 0 (length sortedList - 1)
+      where
+        go low high
+            | low > high = Nothing
+            | otherwise =
+                let mid = (low + high) `div` 2
+                in if pred (sortedList !! mid) && (mid == 0 || not (pred (sortedList !! (mid - 1))))
+                   then Just (sortedList !! mid, mid)
+                   else if pred (sortedList !! mid)
+                        then go low (mid - 1)
+                        else go (mid + 1) high
 
 -- to write models ghci> write_models_to_files linearHierarchyPlan 3000
 -- ghci> write_models_to_files linearHierarchyPlan 3001
