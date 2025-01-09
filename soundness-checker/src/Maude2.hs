@@ -39,12 +39,18 @@ data Feature = F
   }
   deriving (Show, Eq, Generic, NFData)
 
+childGroupsToAscList :: Feature -> [Group]
+childGroupsToAscList = (map snd) . M.toAscList . _childGroups
+
 data Group = G
   { _groupID :: GroupID
   , _groupType :: GroupType
   , _childFeatures :: Set FeatureID
   }
   deriving (Show, Eq, Generic, NFData)
+
+childFeaturesToAscList :: Group -> [FeatureID]
+childFeaturesToAscList = S.toAscList . _childFeatures
 
 type FT = M.Map FeatureID Feature
 data FM = FM FeatureID FT

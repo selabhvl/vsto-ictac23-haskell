@@ -38,12 +38,18 @@ data Feature = F
   }
   deriving (Show, Eq, Generic, NFData)
 
+childGroupsToAscList :: Feature -> [Group]
+childGroupsToAscList = sortOn _groupID . _childGroups
+
 data Group = G
   { _groupID :: GroupID
   , _groupType :: GroupType
   , _childFeatures :: [FeatureID]
   }
   deriving (Show, Eq, Generic, NFData)
+
+childFeaturesToAscList :: Group -> [FeatureID]
+childFeaturesToAscList = sort . _childFeatures
 
 type FT = M.Map FeatureID Feature
 data FM = FM FeatureID FT

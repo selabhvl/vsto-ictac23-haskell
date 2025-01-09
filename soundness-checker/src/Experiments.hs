@@ -4,6 +4,7 @@ module Experiments where
 import System.IO (writeFile)
 import Control.DeepSeq
 import Data.Either
+import Data.List.HT (takeUntil)
 import Data.Maybe
 import Data.Tuple.Utils
 import qualified Data.IntervalMap.Generic.Strict as IM
@@ -17,12 +18,11 @@ import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), Feat
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
 import System.IO (readFile)
 -- Or import Maude2 here:
-import Maude (FM(..), Feature(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf)
+import Maude (FM(..), Feature(..), FT(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf, childFeaturesToAscList, childGroupsToAscList)
 
 import qualified Apply
 import Program (validateAndApply)
 import TreeSequence (treeAt)
-import ExampleIntervalBasedFeatureModel
 
 import Test.HUnit
 
@@ -581,10 +581,11 @@ make_models plan = (fst maude, map ((flip treeAt) (TP 0)) $ fst tcs)
 
 convert_fm_to_featuremodel (FM rootid ft) = FeatureModel (mkFeature ft rootid)
 
-mkFeature ft fid = T.Feature { _featureID = fid, T._name = _name f, _varType = _featureType f, _childGroups = map mkChildGroup (_childGroups f) }
+mkFeature :: FT -> FeatureID -> T.Feature
+mkFeature ft fid = T.Feature { _featureID = fid, T._name = _name f, _varType = _featureType f, _childGroups = (map mkChildGroup) (childGroupsToAscList f) }
   where
     f = fromJust $ M.lookup fid ft
-    mkChildGroup g = T.Group { T._groupID = _groupID g, _varType = _groupType g, T._childFeatures = map (mkFeature ft) (_childFeatures g) }
+    mkChildGroup g = T.Group { T._groupID = _groupID g, _varType = _groupType g, T._childFeatures = map (mkFeature ft) (childFeaturesToAscList g) }
 
 check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
    where
@@ -593,13 +594,21 @@ check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
      tcs   = (!!) (snd models) idx
 
 -- > runTestTT tests_equal
--- Granted, the output is not very helpful for such a large model
+-- Granted, the output is not very helpful for such a large model when things break
 tests_equal = TestList [TestCase (assertEqual "3000" (fst r3000) (snd r3000))
                        ,TestCase (assertEqual "3001" (fst r3001) (snd r3001))
+                       ,TestCase (assertEqual "4498" (fst r4498) (snd r4498))
+                       -- should really bisect here instead:
+                       ,TestCase (assertEqual ("first broken: " ++ show idx) (fst troubleMaker) (snd troubleMaker))
                        ]
   where
     r3000 = check_equal_models linearHierarchyPlan 3000
     r3001 = check_equal_models linearHierarchyPlan 3001
+    r4498 = check_equal_models linearHierarchyPlan 4498
+    models = make_models linearHierarchyPlan
+    mkTCs = zipWith (\maude tcs -> TestCase (assertEqual "nn" (convert_fm_to_featuremodel maude) tcs)) (fst models) (snd models)
+    diverge = takeUntil (uncurry (/=)) $ map (\(m,t) -> (convert_fm_to_featuremodel m, t)) $ zip (fst models) (snd models)
+    (troubleMaker, idx) = (last diverge, length diverge-1) -- We started with the initial model
 
 -- to write models ghci> write_models_to_files linearHierarchyPlan 3000
 -- ghci> write_models_to_files linearHierarchyPlan 3001
@@ -626,4 +635,10 @@ compare_files file1 file2 = do
   if content1 == content2
     then putStrLn "Files are identical."
     else putStrLn "Files differ."
+
+save_models n = do
+    withFile "maude.txt" WriteMode (\h -> do hPutStrLn h (show (fst models)))
+    withFile "tcs.txt" WriteMode (\h -> do hPutStrLn h (show (snd models)))
+  where
+     models = check_equal_models linearHierarchyPlan n
     

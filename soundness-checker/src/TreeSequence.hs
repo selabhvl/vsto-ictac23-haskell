@@ -24,14 +24,14 @@ convertFeature ibfm tp fid = do
   FeatureValidity _ names types _ childGroups <- ibfm ^? featureValidities . ix fid
   (_, name) <- lookupTP tp names
   (_, typ) <- lookupTP tp types
-  let childIDs = foldMap S.toList . IM.elems $ IM.containing childGroups tp
+  let childIDs = foldMap S.toAscList . IM.elems $ IM.containing childGroups tp
   return . Feature fid name typ $ mapMaybe (convertGroup ibfm tp) childIDs
 
 convertGroup :: IntervalBasedFeatureModel -> TimePoint -> GroupID -> Maybe Group
 convertGroup ibfm tp gid = do
   GroupValidity _ types _ childFeatures <- ibfm ^? groupValidities . ix gid
   (_, typ) <- lookupTP tp types
-  let childIDs = foldMap S.toList . IM.elems $ IM.containing childFeatures tp
+  let childIDs = foldMap S.toAscList . IM.elems $ IM.containing childFeatures tp
   return . Group gid typ $ mapMaybe (convertFeature ibfm tp) childIDs
 
 validityToList :: Validity -> [TimePoint]
