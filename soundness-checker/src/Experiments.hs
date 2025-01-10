@@ -577,8 +577,9 @@ tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fme
 --
 make_models plan = (fst maude, map ((flip treeAt) (TP 0)) $ fst tcs)
   where
-    maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
-    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
+    p = plan root_feature
+    maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) p
+    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) p
 
 convert_fm_to_featuremodel (FM rootid ft) = FeatureModel (mkFeature ft rootid)
 
