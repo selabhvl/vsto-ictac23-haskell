@@ -523,10 +523,25 @@ mrlp_experiment_tcs measure plan =
     (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "fid 1"))
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
+smallestRenamePlan :: FeatureID -> [UpdateOperation]
+smallestRenamePlan rfid = [ ChangeOperation (TP 0) (ChangeFeatureName rfid "RenamedFeature1") ]
+
+smallFlatPlan :: Int -> FeatureID -> [UpdateOperation]
+smallFlatPlan l rfid =
+  let groupID = GroupID "gid_root"
+      feature1 = FeatureID "fid_1"
+  in take l (
+  [ AddOperation (Validity (TP 0) Forever) (AddGroup groupID Or rfid) ] ++
+  [ AddOperation (Validity (TP 0) Forever) (AddFeature feature1 "Feature1" Optional groupID)] ++
+  [ ChangeOperation (TP 0) (ChangeFeatureName feature1 "RenamedddFeature1") ]
+  )
+
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
 allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan)
             -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
-           -- ("smallFlatPlan",smallFlatPlan)
+           -- , ("smallestRenamePlan", smallestRenamePlan)
+           , ("smallFlatPlan2", smallFlatPlan 2)
+           , ("smallFlatPlan", smallFlatPlan 3)
            -- ("balancedPlan1",balancedPlan1),
             --("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP w/validation @VS
             --("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)
@@ -610,14 +625,18 @@ tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
 
 tests_equal_all_plans = TestList . concat $ [mkTrouble np | np <- allPlans ]
 
-mkTrouble (n,p) = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (n ++ "@" ++ show idx ++ " (of " ++ show (length $ p undefined) ++")") (fst tm) (snd tm))]) (bisectionGpt (uncurry (/=)) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
+-- We generate a stub if everything is alright.
+mkTrouble (n,p) = maybe [TestCase (assertEqual (n ++ " @ " ++ show l) True True)] (\(tm, idx) -> [TestCase (myAssertEqual (n ++ "@" ++ show idx ++ " (of " ++ l ++")") (fst tm) (snd tm))]) (bisectionGpt (uncurry (/=)) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
   where
+   l = show (length $ p undefined)
    models = make_models p
 
+myAssertEqual :: Eq a => String -> a -> a -> IO ()
 myAssertEqual preface expected actual = unless (actual == expected) (assertFailure preface)
 
 -- requires `pred` to be monotone on `xs` (?):
 -- Could be stingier.
+bisectionGpt :: (a -> Bool) -> [a] -> Maybe (a, Int)
 bisectionGpt _ [] = Nothing
 bisectionGpt pred sortedList = go 0 (length sortedList - 1)
       where
@@ -659,11 +678,9 @@ compare_files file1 file2 = do
     then putStrLn "Files are identical."
     else putStrLn "Files differ."
 
+save_models :: Int -> IO ()
 save_models n = do
     withFile "maude.txt" WriteMode (\h -> do hPutStrLn h (show (fst models)))
     withFile "tcs.txt" WriteMode (\h -> do hPutStrLn h (show (snd models)))
   where
      models = check_equal_models linearHierarchyPlan n
-
-
-     

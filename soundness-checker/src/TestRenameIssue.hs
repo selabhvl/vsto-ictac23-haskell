@@ -1,5 +1,7 @@
 module TestRenameIssue where
 
+import Control.Lens
+import qualified Data.Map as M
 import Test.HUnit
 
 import qualified Apply
@@ -7,17 +9,6 @@ import Types
 
 import TreeSequence (treeAt)
 import Experiments
-
-smallFlatPlan :: FeatureID -> [UpdateOperation]
-smallFlatPlan rfid =
-  let groupID = GroupID "gid_root"
-      feature1 = FeatureID "fid_1"
-  in
-  [ AddOperation (Validity (TP 0) Forever) (AddGroup groupID Or rfid) ] ++
-
-  [ AddOperation (Validity (TP 0) Forever) (AddFeature feature1 "Feature1" Optional groupID)] ++
-
-  [ ChangeOperation (TP 0) (ChangeFeatureName feature1 "RenamedddFeature1") ]
 
 inspectRenameIssue :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
 inspectRenameIssue plan idx = do
@@ -49,13 +40,23 @@ make_models' plan = (fst maude, fst tcs)
 
 tests_smallFlatProblem = TestList [
                            TestCase (assertEqual "small Problem - still ok" ["Feature1"] (childrenOf 2))
+                           , TestCase (assertEqual "names" ["Feature1", "Test1"] (nv 2))
+                           , TestCase (assertEqual "names" ["RenamedddFeature1", "Test1"] (nv 3))
                            , TestCase (assertEqual "small Problem - first error" ["RenamedddFeature1"] (childrenOf 3))
+                           , TestCase (assertEqual "smallest Rename Problem - initial model" ["Test1"] (smallestChildren 0))
+                           , TestCase (assertEqual "smallest Rename Problem" ["RenamedFeature1"] (smallestChildren 1))
+                           , TestCase (assertEqual "smallest Rename Problem - tree " "XXX" smallestTree)
                            ]
   where
+    models = make_models' $ smallFlatPlan 3
     childrenOf idx = map (_name) (_childFeatures cg)
      where
-      models = make_models' smallFlatPlan
       tcsModelAfter = (!!) (snd models) idx
       fm = treeAt tcsModelAfter (TP 0)
       rf = _rootFeature fm
       [cg] = _childGroups rf
+    nv idx = map fst $ M.toAscList (tcsModelAfter ^. nameValidities)
+      where
+       tcsModelAfter = (!!) (snd models) idx
+    smallestChildren idx = map fst . M.toAscList $ ((flip (!!) idx) . snd $ make_models' smallestRenamePlan) ^. nameValidities
+    smallestTree = show $ treeAt ((last . snd $ make_models' smallestRenamePlan)) (TP 0)
