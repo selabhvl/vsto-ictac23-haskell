@@ -63,21 +63,6 @@ fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
 fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False step then (i+1, step) 
                                                                   else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
 
-
-smallFlatPlan :: FeatureID -> [UpdateOperation]
-smallFlatPlan rfid =
-  let groupID = GroupID "gid_root"
-      feature1 = FeatureID "fid_1"
-      feature2 = FeatureID "fid_2"
-  in
-  [ AddOperation (Validity (TP 0) Forever) (AddGroup groupID Or rfid) ] ++
-
-  [ AddOperation (Validity (TP 0) Forever) (AddFeature feature1 "Feature1" Optional groupID),
-    AddOperation (Validity (TP 0) Forever) (AddFeature feature2 "Feature2" Optional groupID) ] ++
-
-  [ ChangeOperation (TP 0) (ChangeFeatureName feature1 "RenamedddFeature1") ] ++
-  [ ChangeOperation (TP 0) (ChangeFeatureName feature2 "RenamedddFeature2") ]
-
  
 
 flatPlan :: FeatureID -> [UpdateOperation]
@@ -539,9 +524,9 @@ mrlp_experiment_tcs measure plan =
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
-allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
+allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan)
             -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
-            ("smallFlatPlan",smallFlatPlan)
+           -- ("smallFlatPlan",smallFlatPlan)
            -- ("balancedPlan1",balancedPlan1),
             --("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP w/validation @VS
             --("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)
@@ -591,11 +576,6 @@ tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fme
 -- Sanity check, both modules producing identical intermediate models:
 --
 make_models plan = (fst maude, map ((flip treeAt) (TP 0)) $ fst tcs)
-  where
-    maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
-    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
-
-make_models' plan = (fst maude, fst tcs)
   where
     maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
     tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)

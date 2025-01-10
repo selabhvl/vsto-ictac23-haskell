@@ -2,10 +2,22 @@ module TestRenameIssue where
 
 import Test.HUnit
 
+import qualified Apply
 import Types
 
 import TreeSequence (treeAt)
 import Experiments
+
+smallFlatPlan :: FeatureID -> [UpdateOperation]
+smallFlatPlan rfid =
+  let groupID = GroupID "gid_root"
+      feature1 = FeatureID "fid_1"
+  in
+  [ AddOperation (Validity (TP 0) Forever) (AddGroup groupID Or rfid) ] ++
+
+  [ AddOperation (Validity (TP 0) Forever) (AddFeature feature1 "Feature1" Optional groupID)] ++
+
+  [ ChangeOperation (TP 0) (ChangeFeatureName feature1 "RenamedddFeature1") ]
 
 inspectRenameIssue :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
 inspectRenameIssue plan idx = do
@@ -29,10 +41,15 @@ inspectRenameIssue plan idx = do
   putStrLn "TCS after TreeAt:"
   putStrLn $ show $ treeAt tcsModelAfter (TP 0)
 
+make_models' plan = (fst maude, fst tcs)
+  where
+    maude = undefined -- foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
+    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
+
+
 tests_smallFlatProblem = TestList [
-                           TestCase (assertEqual "small Problem - still ok" ["Feature1","Feature2"] (childrenOf 3))
-                           , TestCase (assertEqual "small Problem - first error" ["RenamedddFeature1","Feature2"] (childrenOf 4))
-                           , TestCase (assertEqual "small Problem" ["RenamedddFeature1","RenamedddFeature2"] (childrenOf 5))
+                           TestCase (assertEqual "small Problem - still ok" ["Feature1"] (childrenOf 2))
+                           , TestCase (assertEqual "small Problem - first error" ["RenamedddFeature1"] (childrenOf 3))
                            ]
   where
     childrenOf idx = map (_name) (_childFeatures cg)
