@@ -63,27 +63,6 @@ fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
 fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False step then (i+1, step) 
                                                                   else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
 
-inspectRenameIssue :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
-inspectRenameIssue plan idx = do
-  let models = make_models' plan
-  let maudeModelBefore = (!!) (fst models) (idx - 1)
-  let tcsModelBefore   = (!!) (snd models) (idx - 1)
-  let maudeModelAfter  = (!!) (fst models) idx
-  let tcsModelAfter    = (!!) (snd models) idx
-
-  putStrLn  "=== Before Renaming ==="
-  -- putStrLn "Maude Model:"
-  -- print $ convert_fm_to_featuremodel maudeModelBefore
-  -- putStrLn "TCS Model:"
-  putStrLn $ show tcsModelBefore
-
-  putStrLn "\n=== After Renaming ==="
-  -- putStrLn "Maude Model:"
-  -- print $ convert_fm_to_featuremodel maudeModelAfter
-  putStrLn "TCS Model (IBMF):"
-  putStrLn $ show tcsModelAfter
-  putStrLn "TCS after TreeAt:"
-  putStrLn $ show $ treeAt tcsModelAfter (TP 0)
 
 smallFlatPlan :: FeatureID -> [UpdateOperation]
 smallFlatPlan rfid =
@@ -474,9 +453,6 @@ gridHierarchyPlan rfid =
     readdOperations
 
 
-
-
-
 balancedPlan :: FeatureID -> [UpdateOperation]
 balancedPlan rfid =
   let totalFeatures = 6000  
@@ -563,7 +539,7 @@ mrlp_experiment_tcs measure plan =
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
-allPlans = [--("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
+allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan),
             -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
             ("smallFlatPlan",smallFlatPlan)
            -- ("balancedPlan1",balancedPlan1),
