@@ -41,7 +41,11 @@ type ValidityMap a = IM.IntervalMap Validity a
 data TimePoint
   = TP Int
   | Forever
-  deriving (Show, Eq, Ord, Generic, NFData)
+  deriving (Eq, Ord, Generic, NFData)
+
+instance Show TimePoint where
+  show Forever = "∞"
+  show (TP i) = "(TP " ++ show i ++ ")"
 
 data Validity = Validity
   { _start :: TimePoint
