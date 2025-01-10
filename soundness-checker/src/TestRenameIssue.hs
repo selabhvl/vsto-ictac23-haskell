@@ -45,7 +45,7 @@ tests_smallFlatProblem = TestList [
                            , TestCase (assertEqual "small Problem - first error" ["RenamedddFeature1"] (childrenOf 3))
                            , TestCase (assertEqual "smallest Rename Problem - initial model" ["Test1"] (smallestChildren 0))
                            , TestCase (assertEqual "smallest Rename Problem" ["RenamedFeature1"] (smallestChildren 1))
-                           , TestCase (assertEqual "smallest Rename Problem - tree " "XXX" smallestTree)
+                           , TestCase (assertEqual "smallest Rename Problem - tree" "FeatureModel {_rootFeature = Feature {_featureID = FeatureID \"fid 1\", _name = \"RenamedFeature1\", _varType = Mandatory, _childGroups = []}}" smallestTree)
                            ]
   where
     models = make_models' $ smallFlatPlan 3

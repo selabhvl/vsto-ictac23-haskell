@@ -109,4 +109,4 @@ apply (ChangeOperation tp (ChangeFeatureName fid newName)) = \ibfm ->
         & id
           %~ insertName newName (Validity tp e) fid
         & featureValidities . ix fid . nameValidities
-          %~ clampIntervalEnd tp . insert (Validity tp e) newName
+          %~ insert (Validity tp e) newName . clampIntervalEnd tp
