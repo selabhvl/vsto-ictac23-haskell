@@ -537,14 +537,16 @@ smallFlatPlan l rfid =
   )
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
-allPlans = [("flatPlan",flatPlan), ("shallowHierarchyPlan",shallowHierarchyPlan)
-            -- ("hierarchyPlan", hierarchyPlan), -- TODO: @Charaf still broken
+allPlans = [("flatPlan",flatPlan)
+            , ("shallowHierarchyPlan",shallowHierarchyPlan)
+           -- , ("hierarchyPlan", hierarchyPlan) -- TODO: @Charaf still broken
            -- , ("smallestRenamePlan", smallestRenamePlan)
            , ("smallFlatPlan2", smallFlatPlan 2)
            , ("smallFlatPlan", smallFlatPlan 3)
-           -- ("balancedPlan1",balancedPlan1),
-            --("linearHierarchyPlan", linearHierarchyPlan), -- TODO: crashes FMEP w/validation @VS
-            --("gridHierarchyPlan", gridHierarchyPlan), ("balancedPlan", balancedPlan)
+           , ("balancedPlan1",balancedPlan1)
+           , ("linearHierarchyPlan", linearHierarchyPlan)
+           , ("gridHierarchyPlan", gridHierarchyPlan)
+           , ("balancedPlan", balancedPlan)
             ]
 
 all_experiments :: IO ()
