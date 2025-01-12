@@ -13,7 +13,6 @@ import qualified Data.Map as M
 import System.CPUTime
 import System.IO
 import Text.Printf
-import System.IO (readFile)
 import qualified Types as T (Feature(..), Group(..))
 import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel, IntervalBasedFeatureModel(..))
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
@@ -22,6 +21,7 @@ import System.IO (readFile)
 import Maude (FM(..), Feature(..), FT(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf, childFeaturesToAscList, childGroupsToAscList)
 
 import qualified Apply
+import Validate
 import Program (validateAndApply)
 import TreeSequence (treeAt)
 
@@ -539,7 +539,7 @@ smallFlatPlan l rfid =
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
 allPlans = [("flatPlan",flatPlan)
             , ("shallowHierarchyPlan",shallowHierarchyPlan)
-           -- , ("hierarchyPlan", hierarchyPlan) -- TODO: @Charaf still broken
+            , ("hierarchyPlan", hierarchyPlan) -- TODO: @Charaf still broken
            -- , ("smallestRenamePlan", smallestRenamePlan)
            , ("smallFlatPlan2", smallFlatPlan 2)
            , ("smallFlatPlan", smallFlatPlan 3)
@@ -579,25 +579,27 @@ do_the_experiment = defaultMainWith crit_config [
 --
 test_fix_fmep_linearplan_working = fix_fmep_linearplan 3001
 test_fix_fmep_linearplan_broken = fix_fmep_linearplan 3002
-trouble_maker = last $ take 3002 $ linearHierarchyPlan root_feature
 
 fix_fmep_linearplan idx = foldl foldOp (0, False, test_ifm1) $ take idx $ linearHierarchyPlan root_feature
   where
     foldOp acc@(i, aborted, m) op = if aborted then acc else let result = validateAndApply op m in if isRight result then (i+1, False, fromRight m result) else (i+1, True, m)
 
 -- > runTestTT tests_debugging
+tests_debugging :: Test
 tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fmep_linearplan_working) False)
                            ,TestCase (myAssertEqual "ok 3002" (snd3 test_fix_fmep_linearplan_broken) False)
+                           ,TestCase (myAssertEqual "ok all" (snd3 test_fix_fmep_linearplan_broken) False)
                            ]
 
 -- Sanity check, both modules producing identical intermediate models:
 --
-make_models plan = (fst maude, map ((flip treeAt) (TP 0)) $ fst tcs)
+make_models plan = (fst3 maude, map ((flip treeAt) (TP 0)) $ fst3 tcs)
   where
     p = plan root_feature
-    maude = foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) p
-    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) p
+    maude = foldl (\s@(ms, m, idx) op -> let x = mkOp m op in (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) p
+    tcs   = foldl (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in if null (validate op m) then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op:" ++ show op) ([test_ifm1], test_ifm1, 0) p
 
+convert_fm_to_featuremodel :: FM -> FeatureModel
 convert_fm_to_featuremodel (FM rootid ft) = FeatureModel (mkFeature ft rootid)
 
 mkFeature :: FT -> FeatureID -> T.Feature
@@ -614,6 +616,7 @@ check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
 
 -- > runTestTT tests_equal
 -- Granted, the output is not very helpful for such a large model when things break
+tests_equal :: Test
 tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
                        ,TestCase (myAssertEqual "3001" (fst r3001) (snd r3001))
                        ,TestCase (myAssertEqual "4498" (fst r4498) (snd r4498))
@@ -623,15 +626,22 @@ tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
     r3001 = check_equal_models flatPlan 3001
     r4498 = check_equal_models flatPlan 4498
     models = make_models flatPlan
+    -- Do not copy, outdated. This doesn't generate a test if bisection doesn't find a difference. See `mkTrouble` below instead.
     tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (\(m,t) -> m /= t) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
 
+-- Two things can happen here:
+-- an `error` indicates either a real crash, or that we had a plan that didn't validate in FMEP.
+-- A `failure` means the models were not equal.
+tests_equal_all_plans :: Test
 tests_equal_all_plans = TestList . concat $ [mkTrouble np | np <- allPlans ]
 
 -- We generate a stub if everything is alright.
-mkTrouble (n,p) = maybe [TestCase (assertEqual (n ++ " @ " ++ show l) True True)] (\(tm, idx) -> [TestCase (myAssertEqual (n ++ "@" ++ show idx ++ " (of " ++ l ++")") (fst tm) (snd tm))]) (bisectionGpt (uncurry (/=)) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
+mkTrouble (n,p) = [TestLabel (n ++ ", len " ++ l) $ TestCase $ uncurry (myAssertEqual "Models different") $ (maybe (last cvted, last $ snd models) (fst) bisected) ]
   where
    l = show (length $ p undefined)
    models = make_models p
+   cvted = map convert_fm_to_featuremodel $ fst models
+   bisected = bisectionGpt (uncurry (/=)) (zip cvted (snd models))
 
 myAssertEqual :: Eq a => String -> a -> a -> IO ()
 myAssertEqual preface expected actual = unless (actual == expected) (assertFailure preface)

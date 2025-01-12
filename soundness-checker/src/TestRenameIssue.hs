@@ -37,7 +37,7 @@ make_models' plan = (fst maude, fst tcs)
     maude = undefined -- foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
     tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
 
-
+tests_smallFlatProblem :: Test
 tests_smallFlatProblem = TestList [
                            TestCase (assertEqual "small Problem - still ok" ["Feature1"] (childrenOf 2))
                            , TestCase (assertEqual "names" ["Feature1", "Test1"] (nv 2))
