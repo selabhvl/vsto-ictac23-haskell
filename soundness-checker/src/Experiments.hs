@@ -520,7 +520,7 @@ mrlp_experiment_tcs measure plan =
   where
     im = test_ifm1
     hm = foldl (flip Apply.apply) im headPlan
-    (headPlan, tailPlan) = splitAt 3 (plan (FeatureID "fid 1"))
+    (headPlan, tailPlan) = splitAt 3 (plan root_feature)
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
 smallestRenamePlan :: FeatureID -> [UpdateOperation]
@@ -595,9 +595,8 @@ tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fme
 --
 make_models plan = (fst3 maude, map ((flip treeAt) (TP 0)) $ fst3 tcs)
   where
-    p = plan root_feature
-    maude = foldl (\s@(ms, m, idx) op -> let x = mkOp m op in (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) p
-    tcs   = foldl (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in if null (validate op m) then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op:" ++ show op) ([test_ifm1], test_ifm1, 0) p
+    maude = foldl (\s@(ms, m, idx) op -> let x = mkOp m op in (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
+    tcs   = foldl (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in if null (validate op m) then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op: " ++ show op) ([test_ifm1], test_ifm1, 0) plan
 
 convert_fm_to_featuremodel :: FM -> FeatureModel
 convert_fm_to_featuremodel (FM rootid ft) = FeatureModel (mkFeature ft rootid)
@@ -610,7 +609,7 @@ mkFeature ft fid = T.Feature { _featureID = fid, T._name = _name f, _varType = _
 
 check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
    where
-     models = make_models plan
+     models = make_models $ plan root_feature
      maude = (!!) (fst models) idx
      tcs   = (!!) (snd models) idx
 
@@ -625,7 +624,7 @@ tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
     r3000 = check_equal_models flatPlan 3000
     r3001 = check_equal_models flatPlan 3001
     r4498 = check_equal_models flatPlan 4498
-    models = make_models flatPlan
+    models = make_models $ flatPlan root_feature
     -- Do not copy, outdated. This doesn't generate a test if bisection doesn't find a difference. See `mkTrouble` below instead.
     tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (\(m,t) -> m /= t) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
 
@@ -633,15 +632,15 @@ tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
 -- an `error` indicates either a real crash, or that we had a plan that didn't validate in FMEP.
 -- A `failure` means the models were not equal.
 tests_equal_all_plans :: Test
-tests_equal_all_plans = TestList . concat $ [mkTrouble np | np <- allPlans ]
+tests_equal_all_plans = TestList . concat $ [mkTrouble (n, p root_feature) | (n,p) <- allPlans ]
 
 -- We generate a stub if everything is alright.
-mkTrouble (n,p) = [TestLabel (n ++ ", len " ++ l) $ TestCase $ uncurry (myAssertEqual "Models different") $ (maybe (last cvted, last $ snd models) (fst) bisected) ]
+mkTrouble (n,p) = [TestLabel (n ++ ", len " ++ l) $ TestCase $ uncurry (myAssertEqual "Models different") $ (maybe (last cvted, last tcs) (fst) bisected) ]
   where
-   l = show (length $ p undefined)
-   models = make_models p
-   cvted = map convert_fm_to_featuremodel $ fst models
-   bisected = bisectionGpt (uncurry (/=)) (zip cvted (snd models))
+   l = show (length p)
+   (maude, tcs) = make_models p
+   cvted = map convert_fm_to_featuremodel maude
+   bisected = bisectionGpt (uncurry (/=)) (zip cvted tcs)
 
 myAssertEqual :: Eq a => String -> a -> a -> IO ()
 myAssertEqual preface expected actual = unless (actual == expected) (assertFailure preface)
@@ -666,7 +665,7 @@ bisectionGpt pred sortedList = go 0 (length sortedList - 1)
 -- ghci> write_models_to_files linearHierarchyPlan 3001
 write_models_to_files :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
 write_models_to_files plan idx = do
-  let models = make_models plan
+  let models = make_models $ plan root_feature
   let maudeModel = (!!) (fst models) idx
   let tcsModel   = (!!) (snd models) idx
 
