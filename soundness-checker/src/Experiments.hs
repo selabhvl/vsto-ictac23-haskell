@@ -166,15 +166,15 @@ hierarchyPlan rfid =
     firstLevelFeatures = [FeatureID $ "fid_" ++ show n | n <- [2..11]]
 
     subFeatureIDs :: FeatureID -> [FeatureID]
-    subFeatureIDs parentID =
-      let featureIndex = last (words (show parentID)) -- Extract number from parentID
-          base = read featureIndex * 10 -- Unique base ID for each parent
-      in [FeatureID $ "fid_" ++ show (base + n) | n <- [1..2]]
+    subFeatureIDs (FeatureID parentStr) =
+      let base = case reads (drop 4 parentStr) :: [(Int, String)] of
+               [(n, _)] -> n * 10
+               _        -> error $ "Invalid FeatureID format: " ++ parentStr
+               in [FeatureID $ "fid_" ++ show (base + n) | n <- [1..2]]
+
 
     rootOperations =
-      [ AddOperation (Validity (TP 0) Forever) (AddGroup rootGroupID Or rfid),
-        AddOperation (Validity (TP 0) Forever) (AddFeature rfid "Root" Mandatory rootGroupID)
-      ]
+      [ AddOperation (Validity (TP 0) Forever) (AddGroup rootGroupID Or rfid)      ]
 
     -- Add first-level features
     firstLevelOperations =
@@ -539,10 +539,10 @@ smallFlatPlan l rfid =
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
 allPlans = [("flatPlan",flatPlan)
             , ("shallowHierarchyPlan",shallowHierarchyPlan)
-            , ("hierarchyPlan", hierarchyPlan) -- TODO: @Charaf still broken
+            , ("hierarchyPlan", hierarchyPlan) 
            -- , ("smallestRenamePlan", smallestRenamePlan)
-           , ("smallFlatPlan2", smallFlatPlan 2)
-           , ("smallFlatPlan", smallFlatPlan 3)
+         --  , ("smallFlatPlan2", smallFlatPlan 2)
+          -- , ("smallFlatPlan", smallFlatPlan 3)
            , ("balancedPlan1",balancedPlan1)
            , ("linearHierarchyPlan", linearHierarchyPlan)
            , ("gridHierarchyPlan", gridHierarchyPlan)
@@ -552,7 +552,7 @@ allPlans = [("flatPlan",flatPlan)
 all_experiments :: IO ()
 all_experiments = do
   let filename = "data.csv"
-  let iters = 3 -- <-- adjust here
+  let iters = 1 -- <-- adjust here
   hPutStrLn stderr $ "Writing CSV to: " ++ filename ++ ". Iterations: " ++ show iters
   withFile filename WriteMode (\h -> do
     hPutStrLn h "Name,t_exe (Maude),t_check (Maude),wf (Maude),t_exe (FMEP)"
