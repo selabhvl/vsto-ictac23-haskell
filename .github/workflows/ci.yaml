@@ -10,4 +10,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
-      - run: cd Master/soundness-checker && stack test
+      - run: stack test
