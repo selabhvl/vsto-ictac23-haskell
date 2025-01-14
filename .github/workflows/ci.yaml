@@ -10,4 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
-      - run: cabal test all
+        with:
+	  enable-stack: true
+      - run: stack test
