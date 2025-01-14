@@ -6,8 +6,8 @@ jobs:
     runs-on: ubuntu-latest # or macOS-latest, or windows-latest
     defaults:
       run:
-        working-directory: ./soundness-checker
+        working-directory: ./Master/soundness-checker
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
-      - run: cd soundness-checker && stack test
+      - run: cd Master/soundness-checker && stack test
