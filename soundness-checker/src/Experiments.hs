@@ -468,7 +468,7 @@ balancedPlan rfid =
                                              ("RenamedFeature" ++ show i))
   | i <- [7, 7 + totalGroups .. (7 + 7 * renamedFeatures)], i <= totalFeatures, i `mod` 10 /= 0 ] ++ -- Skip removed features
 
-  [ ChangeOperation (TP 0) (ChangeFeatureType (FeatureID $ "fid_" ++ show i) Mandatory)
+  [ ChangeOperation (TP 0) (ChangeFeatureType (FeatureID $ "fid_" ++ show i) Optional)
   | i <- [4, 4 + totalGroups .. (4 + 4 * changedTypes)], i <= totalFeatures, i `mod` 10 /= 0 ] ++ -- Skip removed features
 
   [ AddOperation (Validity (TP 0) Forever) 
@@ -546,7 +546,7 @@ allPlans = [("flatPlan",flatPlan)
            , ("balancedPlan1",balancedPlan1)
            , ("linearHierarchyPlan", linearHierarchyPlan)
            , ("gridHierarchyPlan", gridHierarchyPlan)
-           , ("balancedPlan", balancedPlan)
+          , ("balancedPlan", balancedPlan)
             ]
 
 all_experiments :: IO ()
