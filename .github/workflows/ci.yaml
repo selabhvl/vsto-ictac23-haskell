@@ -7,4 +7,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
-      - run: echo `pwd` && ls && cd ./Master/soundness-checker && stack test
+      - run: cd ./soundness-checker && stack test
