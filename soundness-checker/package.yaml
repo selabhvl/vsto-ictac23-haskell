@@ -26,6 +26,8 @@ dependencies:
 - containers
 - criterion
 - deepseq
+- hspec
+- hspec-contrib
 - HUnit
 - lens
 - lens-aeson

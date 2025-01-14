@@ -1,0 +1,10 @@
+on: [push]
+name: build
+jobs:
+  runhaskell:
+    name: Build & Test
+    runs-on: ubuntu-latest # or macOS-latest, or windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+      - run: cabal test all
