@@ -4,6 +4,9 @@ jobs:
   runhaskell:
     name: Build & Test
     runs-on: ubuntu-latest # or macOS-latest, or windows-latest
+    defaults:
+      run:
+        working-directory: ./soundness-checker
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
