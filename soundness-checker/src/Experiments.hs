@@ -3,7 +3,7 @@
 module Experiments where
 import System.IO (writeFile)
 import Control.DeepSeq
-import Control.Monad (unless)
+import Control.Monad (foldM, unless)
 import Data.Either
 import Data.List.HT (takeUntil)
 import Data.Maybe
@@ -13,6 +13,7 @@ import qualified Data.Map as M
 import System.CPUTime
 import System.IO
 import Text.Printf
+
 import qualified Types as T (Feature(..), Group(..))
 import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel, IntervalBasedFeatureModel(..))
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
@@ -21,11 +22,14 @@ import System.IO (readFile)
 import Maude (FM(..), Feature(..), FT(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf, childFeaturesToAscList, childGroupsToAscList)
 
 import qualified Apply
+import Helpers
 import Validate
 import Program (validateAndApply)
 import TreeSequence (treeAt)
 
 import Test.HUnit
+import Test.QuickCheck
+import Test.QuickCheck.Monadic
 
 import Criterion.Main
 import Criterion.Types hiding (measure)
@@ -596,7 +600,12 @@ tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fme
 make_models plan = (fst3 maude, map ((flip treeAt) (TP 0)) $ fst3 tcs)
   where
     maude = foldl (\s@(ms, m, idx) op -> let x = mkOp m op in (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
-    tcs   = foldl (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in if null (validate op m) then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op: " ++ show op) ([test_ifm1], test_ifm1, 0) plan
+    tcs   = foldl (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in let vals = validate op m in if null vals then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op: " ++ show op ++ ", errs: "++show vals) ([test_ifm1], test_ifm1, 0) plan
+
+make_tcs_models plan = tcs
+  where
+    -- use foldM to bail out early via Left
+    tcs   = foldM (\s@(ms, m, idx) op -> let x = Apply.apply op m in let vals = validate op m in if null vals then Right (ms ++ [x], x, idx+1) else Left (idx, op, vals)) ([test_ifm1], test_ifm1, 0) plan
 
 convert_fm_to_featuremodel :: FM -> FeatureModel
 convert_fm_to_featuremodel (FM rootid ft) = FeatureModel (mkFeature ft rootid)
@@ -626,7 +635,7 @@ tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
     r4498 = check_equal_models flatPlan 4498
     models = make_models $ flatPlan root_feature
     -- Do not copy, outdated. This doesn't generate a test if bisection doesn't find a difference. See `mkTrouble` below instead.
-    tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (\(m,t) -> m /= t) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
+    tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (uncurry (/=)) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
 
 -- Two things can happen here:
 -- an `error` indicates either a real crash, or that we had a plan that didn't validate in FMEP.
@@ -635,12 +644,15 @@ tests_equal_all_plans :: Test
 tests_equal_all_plans = TestList . concat $ [mkTrouble (n, p root_feature) | (n,p) <- allPlans ]
 
 -- We generate a stub if everything is alright.
-mkTrouble (n,p) = [TestLabel (n ++ ", len " ++ l) $ TestCase $ uncurry (myAssertEqual "Models different") $ (maybe (last cvted, last tcs) (fst) bisected) ]
+mkTrouble (n,p) | isRight tcsE = [TestLabel (n ++ ", len " ++ l) $ TestCase $ uncurry (myAssertEqual "Models different") $ (maybe (last cvted, last tcs) (fst) bisected) ]
+                | otherwise = [TestLabel (n ++ ", len " ++ l) $ TestCase $ myAssertEqual "TCS doesn't validate" [] (thd3 $ fromLeft undefined tcsE) ]
   where
    l = show (length p)
-   (maude, tcs) = make_models p
+   (maude, _tcs) = make_models p
+   tcsE = make_tcs_models p
+   tcs = map ((flip treeAt) (TP 0)) $ fst3 $ fromRight undefined tcsE
    cvted = map convert_fm_to_featuremodel maude
-   bisected = bisectionGpt (uncurry (/=)) (zip cvted tcs)
+   bisected | isRight tcsE = bisectionGpt (uncurry (/=)) (zip cvted tcs)
 
 myAssertEqual :: Eq a => String -> a -> a -> IO ()
 myAssertEqual preface expected actual = unless (actual == expected) (assertFailure preface)
@@ -695,3 +707,38 @@ save_models n = do
     withFile "tcs.txt" WriteMode (\h -> do hPutStrLn h (show (snd models)))
   where
      models = check_equal_models linearHierarchyPlan n
+
+
+getIds :: Types.Feature -> ([FeatureID], [GroupID])
+getIds f = ((T._featureID f) : fids , gids)
+  where
+    (fids, gids) = foldr (\(x,y) (ax,ay) -> (x++ax, y++ay)) ([],[]) $ map getIdsG (T._childGroups f)
+
+getIdsG :: Types.Group -> ([FeatureID], [GroupID])
+getIdsG g = (fids, (T._groupID g) : gids)
+  where
+    (fids, gids) = foldr (\(x,y) (ax,ay) -> (x++ax, y++ay)) ([],[]) $ map getIds (T._childFeatures g)
+
+-- Testing a random move operation given an existing plan/model.
+-- Given a random feature/group pair, if the feature is in the ancestors of the group, the Move-operation should fail, otherwise pass.
+-- Depends a lot on having QuickCheck pick enough distinct random pairs, possibly not the best use of our cycles...
+-- We pass in some pre-computed args (most importantly `m`) to avoid re-computing this in the test.
+--
+-- ghci> Test.QuickCheck.quickCheck $ prop_moveFeature linearHierarchyPlan 
+-- +++ OK, passed 100 tests; 249 discarded:
+-- 51% no cycle
+-- 49% cycle
+
+
+prop_move (ancOp, mkOp, lrOp) plan m (NonNegative xf, NonNegative xg) = xf >= 0 && xf < length fids ==> xg >= 0 && xg < length gids ==> label (if hasCycle then "cycle" else "no cycle") $ hasCycle == isLeft (validateAndApply moveOp m)
+  where
+    f = fids !! xf
+    g = gids !! xg
+    fm = treeAt m (TP 0)
+    (fids, gids) = getIds (Types._rootFeature fm)
+    moveOp = ChangeOperation (TP 0) (mkOp f g)
+    ancs = ancestors (ancOp (f,g)) (TP 0) m
+    hasCycle = (lrOp (f,g)) `elem` ancs
+
+prop_moveFeature plan = prop_move (Right . snd, MoveFeature, Left . fst) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
+prop_moveGroup plan = prop_move (Left . fst, flip MoveGroup, Right . snd) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
