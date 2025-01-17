@@ -70,9 +70,9 @@ fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False 
 
  
 
-flatPlan :: FeatureID -> [UpdateOperation]
-flatPlan rfid =
-  let scaleFactor = 10 
+flatPlan :: Int -> FeatureID -> [UpdateOperation]
+flatPlan scaleFactor rfid =
+  let
       totalFeatures = 5000 `div` scaleFactor
       readdFeatures = 1000 `div` scaleFactor
       groupID = GroupID "gid_root"  
@@ -128,10 +128,9 @@ flatPlan rfid =
   | i <- [2,4..readdFeatures] ] 
 
 
-shallowHierarchyPlan :: FeatureID -> [UpdateOperation]
-shallowHierarchyPlan rfid =
+shallowHierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
+shallowHierarchyPlan scaleFactor rfid =
   let 
-    scaleFactor = 10
     totalFeatures = 6000 `div` scaleFactor
     totalGroups = 20
     removedFeatures = 500 `div` scaleFactor
@@ -166,10 +165,9 @@ shallowHierarchyPlan rfid =
     let groupIndex = (i `mod` totalGroups) + 1
     in groupIndex > totalGroups `div` 2 ]
 
-hierarchyPlan :: FeatureID -> [UpdateOperation]
-hierarchyPlan rfid =
+hierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
+hierarchyPlan scaleFactor rfid =
   let
-    scaleFactor = 2 -- Reduces the number of operations by half
     rootGroupID = GroupID "gid_root"
 
     -- Scale the range of first-level features
@@ -213,10 +211,9 @@ hierarchyPlan rfid =
 
 
 
-balancedPlan1 :: FeatureID -> [UpdateOperation]
-balancedPlan1 rfid =
+balancedPlan1 :: Int -> FeatureID -> [UpdateOperation]
+balancedPlan1 scaleFactor rfid =
   let
-    scaleFactor = 10
     totalRootGroups = 20 `div` scaleFactor
     totalRootFeatures = 500 `div` scaleFactor
     subGroupsPerFeature = 4 `div` scaleFactor
@@ -313,10 +310,9 @@ balancedPlan1 rfid =
     readdOperations
 
 
-linearHierarchyPlan :: FeatureID -> [UpdateOperation]
-linearHierarchyPlan rfid =
+linearHierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
+linearHierarchyPlan scaleFactor rfid =
   let 
-      scaleFactor = 10
       totalRootGroups = 20 `div` scaleFactor
       totalFeatures = 1500 `div` scaleFactor
       movedFeatures = 1500 `div` scaleFactor
@@ -374,10 +370,9 @@ linearHierarchyPlan rfid =
 
 
 
-gridHierarchyPlan :: FeatureID -> [UpdateOperation]
-gridHierarchyPlan rfid =
+gridHierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
+gridHierarchyPlan scaleFactor rfid =
   let 
-      scaleFactor = 10
       totalGroups = 100  `div` scaleFactor       
       featuresPerGroup = 100   `div` scaleFactor 
       removedFeatures = 200   `div` scaleFactor 
@@ -456,10 +451,9 @@ gridHierarchyPlan rfid =
     readdOperations
 
 
-balancedPlan :: FeatureID -> [UpdateOperation]
-balancedPlan rfid =
+balancedPlan :: Int -> FeatureID -> [UpdateOperation]
+balancedPlan scaleFactor rfid =
   let 
-      scaleFactor = 10
       totalFeatures = 6000  `div` scaleFactor
       totalGroups = 100     `div` scaleFactor
       readdFeatures = 500   `div` scaleFactor
@@ -557,33 +551,32 @@ smallFlatPlan l rfid =
   )
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
-allPlans = [("flatPlan",flatPlan)
-            , ("shallowHierarchyPlan",shallowHierarchyPlan)
-            , ("hierarchyPlan", hierarchyPlan) 
+allPlans = [("flatPlan",flatPlan 5 )
+            , ("shallowHierarchyPlan",shallowHierarchyPlan 5)
+            , ("hierarchyPlan", hierarchyPlan 1)
            -- , ("smallestRenamePlan", smallestRenamePlan)
          --  , ("smallFlatPlan2", smallFlatPlan 2)
           -- , ("smallFlatPlan", smallFlatPlan 3)
-           , ("balancedPlan1",balancedPlan1)
-           , ("linearHierarchyPlan", linearHierarchyPlan)
-           , ("gridHierarchyPlan", gridHierarchyPlan)
-          , ("balancedPlan", balancedPlan)
+           , ("balancedPlan1",balancedPlan1 2 )
+           , ("linearHierarchyPlan", linearHierarchyPlan 5)
+           , ("gridHierarchyPlan", gridHierarchyPlan 2) -- XXX: 3,4 fails
+          , ("balancedPlan", balancedPlan 5)
             ]
 
 all_experiments :: IO ()
-all_experiments = all_experiments' "data.csv" False
+all_experiments = all_experiments' "data.csv" False 3
 
-all_experiments' :: String -> Bool -> IO ()
-all_experiments' file checkAll = do
+all_experiments' :: String -> Bool -> Int -> IO ()
+all_experiments' file checkAll iters = do
   let filename = file
-  let iters = 1 -- <-- adjust here
   hPutStrLn stderr $ "Writing CSV to: " ++ filename ++ ". Iterations: " ++ show iters
   withFile filename WriteMode (\h -> do
-    hPutStrLn h "Name,t_exe (Maude),t_check (Maude),wf (Maude),t_exe (FMEP)"
+    hPutStrLn h "Name,t_exe (Maude),checkAll (Maude),t_check (Maude),wf (Maude),t_exe (FMEP)"
     res <- mapM (\(n,p) -> do
       hPutStrLn stderr $ "Plan: " ++ n
       maude@(tpm, tcm, trm) <- mrlp_experiment checkAll measure p
       fmep@(tpf, tcf, trf) <- mrlp_experiment_tcs measure p
-      hPrintf h "%s,%0.6f,%0.6f,%s,%0.6f\n" n (tpm :: Double) (tcm :: Double) (show trm) (tpf :: Double) -- ignored: (tcf :: Double)  (show trf)
+      hPrintf h "%s,%0.6f,%s,%0.6f,%s,%0.6f\n" n (tpm :: Double) (if checkAll then "✅" else "❌") (tcm :: Double) (show trm) (tpf :: Double) -- ignored: (tcf :: Double)  (show trf)
       return (n, maude, fmep)
      ) (concat $ replicate iters allPlans)
     print res
@@ -607,7 +600,7 @@ do_the_experiment = defaultMainWith crit_config [
 test_fix_fmep_linearplan_working = fix_fmep_linearplan 3001
 test_fix_fmep_linearplan_broken = fix_fmep_linearplan 3002
 
-fix_fmep_linearplan idx = foldM foldOp (0, test_ifm1) $ take idx $ linearHierarchyPlan root_feature
+fix_fmep_linearplan idx = foldM foldOp (0, test_ifm1) $ take idx $ linearHierarchyPlan 1 root_feature
   where
     foldOp acc@(i, m) op = let result = validateAndApply op m in if isRight result then Right (i+1, fromRight m result) else Left (i+1, m)
 
@@ -658,10 +651,11 @@ tests_equal = TestLabel "flatPlan" $ TestList( [TestCase (myAssertEqual "3000" (
                        ,TestCase (myAssertEqual "4498" (fst r4498) (snd r4498))
                        ] ++ tcBisected)
   where
-    r3000 = check_equal_models flatPlan 3000
-    r3001 = check_equal_models flatPlan 3001
-    r4498 = check_equal_models flatPlan 4498
-    models = make_models $ flatPlan root_feature
+    r3000 = check_equal_models fp 3000
+    r3001 = check_equal_models fp 3001
+    r4498 = check_equal_models fp 4498
+    fp = flatPlan 1
+    models = make_models $ flatPlan 1 root_feature
     -- Do not copy, outdated. This doesn't generate a test if bisection doesn't find a difference. See `mkTrouble` below instead.
     tcBisected = maybe [] (\(tm, idx) -> [TestCase (myAssertEqual (show idx) (fst tm) (snd tm))]) (bisectionGpt (uncurry (/=)) (zip (map convert_fm_to_featuremodel $ fst models) (snd models)))
 
@@ -734,7 +728,7 @@ save_models n = do
     withFile "maude.txt" WriteMode (\h -> do hPutStrLn h (show (fst models)))
     withFile "tcs.txt" WriteMode (\h -> do hPutStrLn h (show (snd models)))
   where
-     models = check_equal_models linearHierarchyPlan n
+     models = check_equal_models (linearHierarchyPlan 10) n
 
 
 getIds :: Types.Feature -> ([FeatureID], [GroupID])

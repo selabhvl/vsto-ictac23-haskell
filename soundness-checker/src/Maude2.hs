@@ -117,10 +117,10 @@ removeFeatureFromParent ft parentFid fid = M.adjust (over childGroups (\gs -> M.
 moveFeature :: FM -> (FeatureID, GroupID) -> FM
 moveFeature (FM rfid ft) (fid, newGroup)
   | rfid /= fid && not (isSubFeature fid newParent rfid ft) && gid = FM rfid ft''''
-  | otherwise = error "moveFeature"
+  | otherwise = error $ "moveFeature failed. isRoot " ++ (show $ rfid /= fid) ++ "," ++ (show fid) ++ "/" ++ show newGroup
   where
-    f = fromJust $ M.lookup fid ft
-    parentFid = fromJust $ _parentID f
+    Just f = M.lookup fid ft
+    Just parentFid = _parentID f
     ft' = M.delete fid ft
     newParent = parentOfGroup ft newGroup
     ft'' = removeFeatureFromParent ft' parentFid fid
