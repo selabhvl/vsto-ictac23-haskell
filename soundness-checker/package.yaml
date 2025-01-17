@@ -64,6 +64,10 @@ executables:
   tcs-csv:
     main:	tcscsv.hs
     source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
     dependencies:
     - soundness-checker
 

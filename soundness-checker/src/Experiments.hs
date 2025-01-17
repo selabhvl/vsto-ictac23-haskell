@@ -5,6 +5,7 @@ import System.IO (writeFile)
 import Control.DeepSeq
 import Control.Monad (foldM, unless)
 import Data.Either
+import Data.Foldable (foldl')
 import Data.List.HT (takeUntil)
 import Data.Maybe
 import Data.Tuple.Utils
@@ -19,7 +20,7 @@ import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), Feat
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
 import System.IO (readFile)
 -- Or import Maude2 here:
-import Maude (FM(..), Feature(..), FT(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf, childFeaturesToAscList, childGroupsToAscList)
+import Maude2 (FM(..), Feature(..), FT(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf, childFeaturesToAscList, childGroupsToAscList)
 
 import qualified Apply
 import Helpers
@@ -487,7 +488,7 @@ measure ds_plan check_op apply_op createFM operations = do
   putStrLn $ "Number of operations: " ++ show (length operations)
   start <- getCPUTime
   
-  let result = foldl apply_op createFM operations
+  let result = foldl' apply_op createFM operations
   -- We deepSeq here, since we shouldn't rely on check_op forcing evaluation.
   -- TODO: if we rely on check_op to deepSeq, there'd be no need to do it here.
   --       Currently, it looks like the Maude-version spends 50/50 here, or 0/100 w/o deepSeq.
@@ -510,9 +511,9 @@ measure ds_plan check_op apply_op createFM operations = do
 
 
 -- mrlp_experiment :: IO ()
-mrlp_experiment measure plan =
+mrlp_experiment checkAll measure plan =
   -- Use `False` in production since a) we need the time, and b) should only plug in plans for which we know the result.
-  measure True (prop_wf False) mkOp hm tailPlan
+  measure True (prop_wf False) (if checkAll then (\x y -> (\m -> if prop_wf True m then m else undefined) $ mkOp x y) else mkOp) hm tailPlan
   where
     im@(FM rfid _) = test_fm1
     hm = foldl mkOp im headPlan
@@ -554,15 +555,18 @@ allPlans = [("flatPlan",flatPlan)
             ]
 
 all_experiments :: IO ()
-all_experiments = do
-  let filename = "data.csv"
+all_experiments = all_experiments' "data.csv" False
+
+all_experiments' :: String -> Bool -> IO ()
+all_experiments' file checkAll = do
+  let filename = file
   let iters = 1 -- <-- adjust here
   hPutStrLn stderr $ "Writing CSV to: " ++ filename ++ ". Iterations: " ++ show iters
   withFile filename WriteMode (\h -> do
     hPutStrLn h "Name,t_exe (Maude),t_check (Maude),wf (Maude),t_exe (FMEP)"
     res <- mapM (\(n,p) -> do
       hPutStrLn stderr $ "Plan: " ++ n
-      maude@(tpm, tcm, trm) <- mrlp_experiment measure p
+      maude@(tpm, tcm, trm) <- mrlp_experiment checkAll measure p
       fmep@(tpf, tcf, trf) <- mrlp_experiment_tcs measure p
       hPrintf h "%s,%0.6f,%0.6f,%s,%0.6f\n" n (tpm :: Double) (tcm :: Double) (show trm) (tpf :: Double) -- ignored: (tcf :: Double)  (show trf)
       return (n, maude, fmep)
@@ -571,36 +575,43 @@ all_experiments = do
    )
   
 
+-- Criterion benchmarking framework:
+
 crit_config :: Config
 crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "report.html", timeLimit = 1 }
 
 do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
-                     bgroup "Maude" [bench n (whnf (mrlp_experiment (\_ _ -> foldl)) p) | (n,p) <- allPlans],
-                     bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl)) p) | (n,p) <- allPlans]]
+                     bgroup "Maude" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
+                     -- bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans]
+                     bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans]
+                     ]
 
 -- Debugging:
 --
 test_fix_fmep_linearplan_working = fix_fmep_linearplan 3001
 test_fix_fmep_linearplan_broken = fix_fmep_linearplan 3002
 
-fix_fmep_linearplan idx = foldl foldOp (0, False, test_ifm1) $ take idx $ linearHierarchyPlan root_feature
+fix_fmep_linearplan idx = foldM foldOp (0, test_ifm1) $ take idx $ linearHierarchyPlan root_feature
   where
-    foldOp acc@(i, aborted, m) op = if aborted then acc else let result = validateAndApply op m in if isRight result then (i+1, False, fromRight m result) else (i+1, True, m)
+    foldOp acc@(i, m) op = let result = validateAndApply op m in if isRight result then Right (i+1, fromRight m result) else Left (i+1, m)
 
 -- > runTestTT tests_debugging
 tests_debugging :: Test
-tests_debugging = TestList [TestCase (myAssertEqual "ok 3001" (snd3 test_fix_fmep_linearplan_working) False)
-                           ,TestCase (myAssertEqual "ok 3002" (snd3 test_fix_fmep_linearplan_broken) False)
-                           ,TestCase (myAssertEqual "ok all" (snd3 test_fix_fmep_linearplan_broken) False)
+tests_debugging = TestList [TestCase (myAssertLR "ok 3001" (test_fix_fmep_linearplan_working))
+                           ,TestCase (myAssertLR "ok 3002" (test_fix_fmep_linearplan_broken))
+                           ,TestCase (myAssertLR "ok all"  (test_fix_fmep_linearplan_broken))
                            ]
+
+myAssertLR :: Eq a => String -> Either a b -> IO ()
+myAssertLR preface actual = unless (isRight actual) (assertFailure preface)
 
 -- Sanity check, both modules producing identical intermediate models:
 --
 make_models plan = (fst3 maude, map ((flip treeAt) (TP 0)) $ fst3 tcs)
   where
-    maude = foldl (\s@(ms, m, idx) op -> let x = mkOp m op in (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
-    tcs   = foldl (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in let vals = validate op m in if null vals then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op: " ++ show op ++ ", errs: "++show vals) ([test_ifm1], test_ifm1, 0) plan
+    maude = foldl' (\s@(ms, m, idx) op -> let x = mkOp m op in if idx `mod` 50 == 0 && prop_wf True x then (ms ++ [x], x, idx+1) else (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
+    tcs   = foldl' (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in let vals = validate op m in if null vals then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op: " ++ show op ++ ", errs: "++show vals) ([test_ifm1], test_ifm1, 0) plan
 
 make_tcs_models plan = tcs
   where
@@ -616,6 +627,7 @@ mkFeature ft fid = T.Feature { _featureID = fid, T._name = _name f, _varType = _
     f = fromJust $ M.lookup fid ft
     mkChildGroup g = T.Group { T._groupID = _groupID g, _varType = _groupType g, T._childFeatures = map (mkFeature ft) (childFeaturesToAscList g) }
 
+-- do not call in a loop!
 check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
    where
      models = make_models $ plan root_feature
