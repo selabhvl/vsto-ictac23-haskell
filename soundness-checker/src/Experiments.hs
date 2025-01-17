@@ -610,7 +610,8 @@ myAssertLR preface actual = unless (isRight actual) (assertFailure preface)
 --
 make_models plan = (fst3 maude, map ((flip treeAt) (TP 0)) $ fst3 tcs)
   where
-    maude = foldl' (\s@(ms, m, idx) op -> let x = mkOp m op in if idx `mod` 50 == 0 && prop_wf True x then (ms ++ [x], x, idx+1) else (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
+    -- maude = foldl' (\s@(ms, m, idx) op -> let x = mkOp m op in if idx `mod` 50 == 0 && prop_wf True x then (ms ++ [x], x, idx+1) else (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
+    maude = foldl' (\s@(ms, m, idx) op -> let x = mkOp m op in (ms ++ [x], x, idx+1)) ([test_fm1], test_fm1, 0) plan
     tcs   = foldl' (\s@(ms, m, idx) op -> let x = (flip Apply.apply) m op in let vals = validate op m in if null vals then (ms ++ [x], x, idx+1) else error $ "not validated, step: " ++ show idx ++ ", op: " ++ show op ++ ", errs: "++show vals) ([test_ifm1], test_ifm1, 0) plan
 
 make_tcs_models plan = tcs
@@ -742,7 +743,7 @@ getIdsG g = (fids, (T._groupID g) : gids)
 -- 49% cycle
 
 
-prop_move (ancOp, mkOp, lrOp) plan m (NonNegative xf, NonNegative xg) = xf >= 0 && xf < length fids ==> xg >= 0 && xg < length gids ==> label (if hasCycle then "cycle" else "no cycle") $ hasCycle == isLeft (validateAndApply moveOp m)
+prop_move (ancOp, mkOp, lrOp) plan m (NonNegative xf, NonNegative xg) = xf < length fids ==> xg < length gids ==> label (if hasCycle then "cycle" else "no cycle") $ hasCycle == isLeft (validateAndApply moveOp m)
   where
     f = fids !! xf
     g = gids !! xg
