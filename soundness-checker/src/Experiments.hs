@@ -591,7 +591,7 @@ crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "repor
 do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
                      bgroup "Maude" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
-                     -- bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans]
+                     bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans]
                      ]
 
