@@ -606,7 +606,7 @@ fix_fmep_linearplan idx = foldM foldOp (0, test_ifm1) $ take idx $ linearHierarc
 
 -- > runTestTT tests_debugging
 tests_debugging :: Test
-tests_debugging = TestList [TestCase (myAssertLR "ok 3001" (test_fix_fmep_linearplan_working))
+tests_debugging = TestLabel "debugging linearplan" $ TestList [TestCase (myAssertLR "ok 3001" (test_fix_fmep_linearplan_working))
                            ,TestCase (myAssertLR "ok 3002" (test_fix_fmep_linearplan_broken))
                            ,TestCase (myAssertLR "ok all"  (test_fix_fmep_linearplan_broken))
                            ]
@@ -646,7 +646,7 @@ check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
 -- > runTestTT tests_equal
 -- Granted, the output is not very helpful for such a large model when things break
 tests_equal :: Test
-tests_equal = TestLabel "flatPlan" $ TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
+tests_equal = TestLabel "debugging flatPlan" $ TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
                        ,TestCase (myAssertEqual "3001" (fst r3001) (snd r3001))
                        ,TestCase (myAssertEqual "4498" (fst r4498) (snd r4498))
                        ] ++ tcBisected)
@@ -663,7 +663,7 @@ tests_equal = TestLabel "flatPlan" $ TestList( [TestCase (myAssertEqual "3000" (
 -- an `error` indicates either a real crash, or that we had a plan that didn't validate in FMEP.
 -- A `failure` means the models were not equal.
 tests_equal_all_plans :: Test
-tests_equal_all_plans = TestList . concat $ [mkTrouble (n, p root_feature) | (n,p) <- allPlans ]
+tests_equal_all_plans = TestLabel "Checking Maude-results against FMEP-results" $ TestList . concat $ [mkTrouble (n, p root_feature) | (n,p) <- allPlans ]
 
 -- We generate a stub if everything is alright.
 mkTrouble (n,p) | isRight tcsE = [TestLabel (n ++ ", len " ++ l) $ TestCase $ uncurry (myAssertEqual "Models different") $ (maybe (last cvted, last tcs) (fst) bisected) ]

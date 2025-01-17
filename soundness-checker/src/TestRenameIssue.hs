@@ -1,6 +1,7 @@
 module TestRenameIssue where
 
 import Control.Lens
+import Data.Foldable (foldl')
 import qualified Data.Map as M
 import Test.HUnit
 
@@ -13,9 +14,9 @@ import Experiments
 inspectRenameIssue :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
 inspectRenameIssue plan idx = do
   let models = make_models' plan
-  let maudeModelBefore = (!!) (fst models) (idx - 1)
+  -- let maudeModelBefore = (!!) (fst models) (idx - 1)
   let tcsModelBefore   = (!!) (snd models) (idx - 1)
-  let maudeModelAfter  = (!!) (fst models) idx
+  -- let maudeModelAfter  = (!!) (fst models) idx
   let tcsModelAfter    = (!!) (snd models) idx
 
   putStrLn  "=== Before Renaming ==="
@@ -35,10 +36,10 @@ inspectRenameIssue plan idx = do
 make_models' plan = (fst maude, fst tcs)
   where
     maude = undefined -- foldl (\s@(ms, m) op -> let x = mkOp m op in (ms ++ [x], x)) ([test_fm1], test_fm1) (plan root_feature)
-    tcs   = foldl (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
+    tcs   = foldl' (\s@(ms, m) op -> let x = (flip Apply.apply) m op in (ms ++ [x], x)) ([test_ifm1], test_ifm1) (plan root_feature)
 
 tests_smallFlatProblem :: Test
-tests_smallFlatProblem = TestList [
+tests_smallFlatProblem = TestLabel "debugging rename-issue" $ TestList [
                            TestCase (assertEqual "small Problem - still ok" ["Feature1"] (childrenOf 2))
                            , TestCase (assertEqual "names" ["Feature1", "Test1"] (nv 2))
                            , TestCase (assertEqual "names" ["RenamedddFeature1", "Test1"] (nv 3))
