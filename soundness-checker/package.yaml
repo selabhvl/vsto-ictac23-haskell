@@ -61,6 +61,11 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - soundness-checker
+  tcs-csv:
+    main:	tcscsv.hs
+    source-dirs:         app
+    dependencies:
+    - soundness-checker
 
 tests:
   soundness-checker-test:
