@@ -1,7 +1,6 @@
 import Test.Hspec
 import Test.Hspec.Contrib.HUnit (fromHUnitTest)
 import Test.Hspec.QuickCheck
-import Test.QuickCheck
 
 import Experiments
 import TestRenameIssue

@@ -762,5 +762,5 @@ prop_move (ancOp, mkOp, lrOp) plan m (NonNegative xf, NonNegative xg) = xf < len
     ancs = ancestors (ancOp (f,g)) (TP 0) m
     hasCycle = (lrOp (f,g)) `elem` ancs
 
-prop_moveFeature plan = prop_move (Right . snd, MoveFeature, Left . fst) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
-prop_moveGroup plan = prop_move (Left . fst, flip MoveGroup, Right . snd) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
+prop_moveFeature plan = withDiscardRatio 50 $ prop_move (Right . snd, MoveFeature, Left . fst) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
+prop_moveGroup plan = withDiscardRatio 50 $ prop_move (Left . fst, flip MoveGroup, Right . snd) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
