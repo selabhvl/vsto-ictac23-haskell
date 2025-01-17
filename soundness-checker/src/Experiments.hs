@@ -653,7 +653,7 @@ check_equal_models plan idx = (convert_fm_to_featuremodel maude, tcs)
 -- > runTestTT tests_equal
 -- Granted, the output is not very helpful for such a large model when things break
 tests_equal :: Test
-tests_equal = TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
+tests_equal = TestLabel "flatPlan" $ TestList( [TestCase (myAssertEqual "3000" (fst r3000) (snd r3000))
                        ,TestCase (myAssertEqual "3001" (fst r3001) (snd r3001))
                        ,TestCase (myAssertEqual "4498" (fst r4498) (snd r4498))
                        ] ++ tcBisected)

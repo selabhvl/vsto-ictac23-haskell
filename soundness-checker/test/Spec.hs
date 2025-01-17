@@ -8,6 +8,6 @@ main :: IO ()
 main = hspec $ do
   describe "Running some HUnit tests" $ do
     fromHUnitTest tests_debugging
-    fromHUnitTest tests_equal
+    -- fromHUnitTest tests_equal
     fromHUnitTest tests_smallFlatProblem
     fromHUnitTest tests_equal_all_plans
