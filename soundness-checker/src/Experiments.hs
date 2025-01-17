@@ -72,8 +72,9 @@ fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False 
 
 flatPlan :: FeatureID -> [UpdateOperation]
 flatPlan rfid =
-  let totalFeatures = 5000  
-      readdFeatures = 1000  
+  let scaleFactor = 10 
+      totalFeatures = 5000 `div` scaleFactor
+      readdFeatures = 1000 `div` scaleFactor
       groupID = GroupID "gid_root"  
   in
   -- Add a single group under the root feature
@@ -129,12 +130,14 @@ flatPlan rfid =
 
 shallowHierarchyPlan :: FeatureID -> [UpdateOperation]
 shallowHierarchyPlan rfid =
-  let totalFeatures = 6000 
-      totalGroups = 20      
-      removedFeatures = 500 
-      movedFeatures = 200   
-      renamedFeatures = 300 
-      changedTypes = 300    
+  let 
+    scaleFactor = 10
+    totalFeatures = 6000 `div` scaleFactor
+    totalGroups = 20
+    removedFeatures = 500 `div` scaleFactor
+    movedFeatures = 200   `div` scaleFactor
+    renamedFeatures = 300 `div` scaleFactor
+    changedTypes = 300    `div` scaleFactor
   in
 
   [ AddOperation (Validity (TP 0) Forever) (AddGroup (GroupID $ "gid_" ++ show g) Or rfid)
@@ -166,29 +169,30 @@ shallowHierarchyPlan rfid =
 hierarchyPlan :: FeatureID -> [UpdateOperation]
 hierarchyPlan rfid =
   let
+    scaleFactor = 2 -- Reduces the number of operations by half
     rootGroupID = GroupID "gid_root"
 
-    firstLevelFeatures = [FeatureID $ "fid_" ++ show n | n <- [2..11]]
+    -- Scale the range of first-level features
+    firstLevelFeatures = [FeatureID $ "fid_" ++ show n | n <- [2..(11 `div` scaleFactor)]]
 
     subFeatureIDs :: FeatureID -> [FeatureID]
     subFeatureIDs (FeatureID parentStr) =
       let base = case reads (drop 4 parentStr) :: [(Int, String)] of
-               [(n, _)] -> n * 10
-               _        -> error $ "Invalid FeatureID format: " ++ parentStr
-               in [FeatureID $ "fid_" ++ show (base + n) | n <- [1..2]]
-
+                   [(n, _)] -> n * 10
+                   _        -> error $ "Invalid FeatureID format: " ++ parentStr
+      in [FeatureID $ "fid_" ++ show (base + n) | n <- [1..(2 `div` scaleFactor)]]
 
     rootOperations =
-      [ AddOperation (Validity (TP 0) Forever) (AddGroup rootGroupID Or rfid)      ]
+      [ AddOperation (Validity (TP 0) Forever) (AddGroup rootGroupID Or rfid) ]
 
-    -- Add first-level features
+    -- Add first-level features with scaling
     firstLevelOperations =
       [ AddOperation (Validity (TP 0) Forever)
           (AddFeature fid ("Child_" ++ show n) Optional rootGroupID)
-      | (fid, n) <- zip firstLevelFeatures [2..11]
+      | (fid, n) <- zip firstLevelFeatures [2..(11 `div` scaleFactor)]
       ]
 
-    -- Add groups and sub-features for each first-level feature
+    -- Add groups and sub-features for each first-level feature with scaling
     subFeatureOperations =
       concat
         [ let groupID = GroupID $ "gid_" ++ show n
@@ -198,9 +202,9 @@ hierarchyPlan rfid =
             :
             [ AddOperation (Validity (TP 0) Forever)
                 (AddFeature subFid ("Sub_" ++ show n ++ "_" ++ show subIdx) Optional groupID)
-            | (subFid, subIdx) <- zip (subFeatureIDs parentID) [1..]
+            | (subFid, subIdx) <- zip (subFeatureIDs parentID) [1..(2 `div` scaleFactor)]
             ]
-        | (parentID, n) <- zip firstLevelFeatures [2..11]
+        | (parentID, n) <- zip firstLevelFeatures [2..(11 `div` scaleFactor)]
         ]
 
   in
@@ -211,84 +215,89 @@ hierarchyPlan rfid =
 
 balancedPlan1 :: FeatureID -> [UpdateOperation]
 balancedPlan1 rfid =
-  let 
-      -- Reduced counts for root level groups features
-      totalRootGroups = 20  
-      totalRootFeatures = 500  
-      subGroupsPerFeature = 4  
-      featuresPerSubGroup = 5  
+  let
+    scaleFactor = 10
+    totalRootGroups = 20 `div` scaleFactor
+    totalRootFeatures = 500 `div` scaleFactor
+    subGroupsPerFeature = 4 `div` scaleFactor
+    featuresPerSubGroup = 5 `div` scaleFactor
+    readdFeatures = 200 `div` scaleFactor
+    movedFeatures = 300 `div` scaleFactor
+    renamedFeatures = 150 `div` scaleFactor
+    changedTypes = 200 `div` scaleFactor
 
-      readdFeatures = 200       
-      movedFeatures = 300       
-      renamedFeatures = 150    
-      changedTypes = 200        
+    makeFeatureID i = FeatureID $ "fid_" ++ show i
+    makeGroupID i = GroupID $ "gid_" ++ show i
 
-      makeFeatureID i = FeatureID $ "fid_" ++ show i
-      makeGroupID i = GroupID $ "gid_" ++ show i
-      rootGroupOperations =
-        [ AddOperation (Validity (TP 0) Forever) 
-            (AddGroup (makeGroupID g) 
-                      (if g <= totalRootGroups `div` 2 then Or else And) 
-                      rfid)
-        | g <- [1..totalRootGroups] ]
+    rootGroupOperations =
+      [ AddOperation (Validity (TP 0) Forever)
+          (AddGroup (makeGroupID g)
+                    (if g <= totalRootGroups `div` 2 then Or else And)
+                    rfid)
+      | g <- [1..totalRootGroups] ]
 
-      -- features distributed across root groups
-      rootFeatureOperations =
-        [ AddOperation (Validity (TP 0) Forever) 
-            (AddFeature (makeFeatureID i) 
-                        ("Feature" ++ show i) 
-                        Optional 
-                        (makeGroupID ((i `mod` totalRootGroups) + 1)))
+    -- Features distributed across root groups
+    rootFeatureOperations =
+      [ AddOperation (Validity (TP 0) Forever)
+          (AddFeature (makeFeatureID i)
+                      ("Feature" ++ show i)
+                      Optional
+                      (makeGroupID ((i `mod` totalRootGroups) + 1)))
+      | i <- [1..totalRootFeatures] ]
+
+    -- Add sub-groups for each root level feature
+    subGroupOperations =
+      concat
+        [ let parentFeature = makeFeatureID i
+          in [ AddOperation (Validity (TP 0) Forever)
+                (AddGroup (makeGroupID (i * 100 + g)) Or parentFeature)
+             | g <- [1..subGroupsPerFeature] ]
         | i <- [1..totalRootFeatures] ]
 
-      -- Add sub-groups for each root level feature
-      subGroupOperations =
-        concat
-          [ let parentFeature = makeFeatureID i
-            in [ AddOperation (Validity (TP 0) Forever) 
-                  (AddGroup (makeGroupID (i * 100 + g)) Or parentFeature)
-               | g <- [1..subGroupsPerFeature] ]
-          | i <- [1..totalRootFeatures] ]
+    -- Add features to each subgroup
+    subGroupFeatureOperations =
+      concat
+        [ let parentGroup = makeGroupID (i * 100 + g)
+          in [ AddOperation (Validity (TP 0) Forever)
+                (AddFeature (makeFeatureID (i * 1000 + g * 10 + f))
+                            ("SubFeature" ++ show (i * 1000 + g * 10 + f))
+                            Optional
+                            parentGroup)
+             | f <- [1..featuresPerSubGroup] ]
+        | i <- [1..totalRootFeatures], g <- [1..subGroupsPerFeature] ]
 
-      -- Add features to each subgroup
-      subGroupFeatureOperations =
-        concat
-          [ let parentGroup = makeGroupID (i * 100 + g)
-            in [ AddOperation (Validity (TP 0) Forever)
-                  (AddFeature (makeFeatureID (i * 1000 + g * 10 + f))
-                              ("SubFeature" ++ show (i * 1000 + g * 10 + f))
-                              Optional
-                              parentGroup)
-               | f <- [1..featuresPerSubGroup] ]
-          | i <- [1..totalRootFeatures], g <- [1..subGroupsPerFeature] ]
-
-      -- Remove leaf features
-      removeOperations =
-        take 500 [ ChangeOperation (TP 0) (RemoveFeature (makeFeatureID (i * 1000 + g * 10 + f)))
-        | i <- [1..totalRootFeatures],  
-          g <- [1..subGroupsPerFeature],  
-          f <- [1..featuresPerSubGroup] 
+    -- Remove leaf features
+    removeOperations =
+      take 500
+        [ ChangeOperation (TP 0) (RemoveFeature (makeFeatureID (i * 1000 + g * 10 + f)))
+        | i <- [1..totalRootFeatures],
+          g <- [1..subGroupsPerFeature],
+          f <- [1..featuresPerSubGroup]
         ]
 
-      moveOperations =
-        take 300 [ ChangeOperation (TP 0) (MoveFeature (makeFeatureID i) (makeGroupID ((i `mod` totalRootGroups) + 1)))
-        | i <- [5, 15..(5 + movedFeatures)], i `mod` 10 /= 0 ] 
+    moveOperations =
+      take 300
+        [ ChangeOperation (TP 0) (MoveFeature (makeFeatureID i) (makeGroupID ((i `mod` totalRootGroups) + 1)))
+        | i <- [5, 15..(5 + movedFeatures)], i `mod` 10 /= 0 ]
 
-      renameOperations =
-        take 150 [ ChangeOperation (TP 0) (ChangeFeatureName (makeFeatureID i) 
-                                                 ("RenamedFeature" ++ show i))
-        | i <- [7, 17..(7 + renamedFeatures)], i `mod` 10 /= 0 ] 
+    renameOperations =
+      take 150
+        [ ChangeOperation (TP 0) (ChangeFeatureName (makeFeatureID i)
+                                                    ("RenamedFeature" ++ show i))
+        | i <- [7, 17..(7 + renamedFeatures)], i `mod` 10 /= 0 ]
 
-      changeTypeOperations =
-        [ ChangeOperation (TP 0) (ChangeFeatureType (makeFeatureID i) Optional)
-        | i <- [1..totalRootFeatures], 
-          (i `mod` totalRootGroups) + 1 > totalRootGroups `div` 2, -- Only for AND groups
-          i `mod` 10 /= 0 ] -- Skip some features for variation
-      readdOperations =
-        take 200 [ AddOperation (Validity (TP 0) Forever) 
-            (AddFeature (FeatureID $ "fid_readd_" ++ show i) 
-                        ("ReaddedFeature" ++ show i) 
-                        Optional 
+    changeTypeOperations =
+      [ ChangeOperation (TP 0) (ChangeFeatureType (makeFeatureID i) Optional)
+      | i <- [1..totalRootFeatures],
+        (i `mod` totalRootGroups) + 1 > totalRootGroups `div` 2, -- Only for AND groups
+        i `mod` 10 /= 0 ] -- Skip some features for variation
+
+    readdOperations =
+      take 200
+        [ AddOperation (Validity (TP 0) Forever)
+            (AddFeature (FeatureID $ "fid_readd_" ++ show i)
+                        ("ReaddedFeature" ++ show i)
+                        Optional
                         (makeGroupID ((i `mod` totalRootGroups) + 1)))
         | i <- [1..readdFeatures] ]
 
@@ -303,14 +312,17 @@ balancedPlan1 rfid =
     changeTypeOperations ++
     readdOperations
 
+
 linearHierarchyPlan :: FeatureID -> [UpdateOperation]
 linearHierarchyPlan rfid =
   let 
-      totalFeatures = 1500 
-      movedFeatures = 1500 
-      renamedFeatures = 1500 
-      changedTypes = 1500 
-      readdFeatures = 1500 
+      scaleFactor = 10
+      totalRootGroups = 20 `div` scaleFactor
+      totalFeatures = 1500 `div` scaleFactor
+      movedFeatures = 1500 `div` scaleFactor
+      renamedFeatures = 1500 `div` scaleFactor
+      changedTypes = 1500 `div` scaleFactor
+      readdFeatures = 1500 `div` scaleFactor
 
       makeFeatureID i = FeatureID $ "fid_" ++ show i
       makeGroupID i = GroupID $ "gid_" ++ show i
@@ -365,13 +377,14 @@ linearHierarchyPlan rfid =
 gridHierarchyPlan :: FeatureID -> [UpdateOperation]
 gridHierarchyPlan rfid =
   let 
-      totalGroups = 100         
-      featuresPerGroup = 100    
-      removedFeatures = 200    
-      movedFeatures = 300     
-      renamedFeatures = 200    
-      changedTypes = 200     
-      readdFeatures = 100     
+      scaleFactor = 10
+      totalGroups = 100  `div` scaleFactor       
+      featuresPerGroup = 100   `div` scaleFactor 
+      removedFeatures = 200   `div` scaleFactor 
+      movedFeatures = 300     `div` scaleFactor
+      renamedFeatures = 200   `div` scaleFactor 
+      changedTypes = 200    `div` scaleFactor 
+      readdFeatures = 100  `div` scaleFactor   
 
       makeFeatureID g f = FeatureID $ "fid_" ++ show g ++ "_" ++ show f
       makeGroupID g = GroupID $ "gid_" ++ show g
@@ -445,13 +458,15 @@ gridHierarchyPlan rfid =
 
 balancedPlan :: FeatureID -> [UpdateOperation]
 balancedPlan rfid =
-  let totalFeatures = 6000  
-      totalGroups = 100     
-      readdFeatures = 500   
-      removedFeatures = 700
-      movedFeatures = 1000  
-      renamedFeatures = 500 
-      changedTypes = 800    
+  let 
+      scaleFactor = 10
+      totalFeatures = 6000  `div` scaleFactor
+      totalGroups = 100     `div` scaleFactor
+      readdFeatures = 500   `div` scaleFactor
+      removedFeatures = 700 `div` scaleFactor
+      movedFeatures = 1000  `div` scaleFactor
+      renamedFeatures = 500 `div` scaleFactor
+      changedTypes = 800   `div` scaleFactor 
   in
   [ AddOperation (Validity (TP 0) Forever) (AddGroup (GroupID $ "gid_" ++ show g) Or rfid)
   | g <- [1..totalGroups] ] ++
