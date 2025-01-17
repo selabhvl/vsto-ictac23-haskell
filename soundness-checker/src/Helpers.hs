@@ -8,6 +8,7 @@ module Helpers where
 import Control.Lens
 import Data.IntervalMap.Generic.Strict ((!))
 import qualified Data.IntervalMap.Generic.Strict as IM
+import Data.Containers.ListUtils (nubOrd)
 import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
 import Data.Ord (comparing)
@@ -229,3 +230,17 @@ firstMove xs (Validity tstart tend) featureModel =
       if e >= tend
         then Nothing
         else Just (e, Right gid, Left target)
+
+noDupes :: Ord a => [a] -> Bool
+noDupes xs = nubOrd xs == xs
+
+isExactlyOne :: [a] -> Bool
+-- isExactlyOne =  (== 1) . length
+isExactlyOne [] = False
+isExactlyOne [_] = True
+isExactlyOne _ = False
+
+isGtOne :: [a] -> Bool
+isGtOne [] = False
+isGtOne [x] = False
+isGtOne _ = True

@@ -19,7 +19,6 @@ import Control.Monad (liftM)
 import Data.Algebra.Boolean ((-->))
 import qualified Data.Map as M
 import Data.List
-import Data.Containers.ListUtils (nubOrd)
 import Data.Maybe
 import Data.Tuple.Utils
 import Test.QuickCheck
@@ -28,7 +27,7 @@ import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePo
 import Types (IntervalBasedFeatureModel)
 
 import qualified Apply
-import qualified ExampleIntervalBasedFeatureModel
+import Helpers (noDupes, isExactlyOne, isGtOne)
 
 data Feature = F
   { _name :: Name
@@ -248,36 +247,35 @@ wf4 :: FM -> Bool
 wf4 (FM _rfid ft) = True -- TODO: NOP?
 
 wf5 :: FM -> Bool
-wf5 fm@(FM rfid ft) = all ((== 1). length . filter (== True)) featSeen -- filter id?
+wf5 fm@(FM rfid ft) = all (isExactlyOne . filter (== True)) featSeen -- filter id?
   where
     ftNoRoot = M.delete rfid ft
     featSeen = map (\f -> map (\g -> f `elem` (_childFeatures g)) (allGroups fm)) $ M.keys ftNoRoot
  
-wf6 :: FM -> Bool
-wf6 fm@(FM rfid ft) = all (\g -> (==1) . length . filter (\(gid,_) -> gid == _groupID g) $ gidMap) (allGroups fm)
+wf6 :: [Group] -> FM -> Bool
+wf6 ag fm@(FM rfid ft) = all (\g ->isExactlyOne . filter (\(gid,_) -> gid == _groupID g) $ gidMap) ag
   where
     gidMap = concatMap (\(fid,f) -> map (\g -> (_groupID g, fid)) (_childGroups f) ) $ M.assocs ft :: [(GroupID, FeatureID)]
 
-wf7 :: FM -> Bool
-wf7 fm@(FM rfid ft) = all (\g -> if _groupType g `elem` [Alternative, Or] then all (\fid -> (/= Mandatory) . _featureType . fromJust $ M.lookup fid ft) $ _childFeatures g else True) (allGroups fm)
+wf7 :: [Group] -> FM -> Bool
+wf7 ag fm@(FM rfid ft) = all (\g -> if _groupType g `elem` [Alternative, Or] then all (\fid -> (/= Mandatory) . _featureType . fromJust $ M.lookup fid ft) $ _childFeatures g else True) ag
 
-wf8 :: FM -> Bool
-wf8 fm@(FM rfid ft) = all (\g -> if _groupType g `elem` [Alternative, Or] then length (_childFeatures g) > 1 else True) (allGroups fm)
+wf8 :: [Group] -> FM -> Bool
+-- TODO: eliminate length
+wf8 ag fm@(FM rfid ft) = all (\g -> if _groupType g `elem` [Alternative, Or] then isGtOne (_childFeatures g) else True) ag
 
 allGroups :: FM -> [Group]
 allGroups (FM rfid ft) = concatMap _childGroups $ M.elems ft
 
-noDupes :: Ord a => [a] -> Bool
-noDupes xs = nubOrd xs == xs
-
 ----- QuickCheck
-
+-- TODO: needs some fusion...
 prop_wf :: Bool -> FM -> Bool
 prop_wf shouldFail fm
   | and results = True
   | otherwise = if shouldFail then error $ "Some WF failed: " ++ show ((map fst) . (filter (not . snd)) . (zip [1..]) $ results) else False
   where
-    results = map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6, wf7] -- XXX , wf8]
+    ag = allGroups fm
+    results = map (\f -> f fm) [wf1, wf2, wf3, wf4, wf5, wf6 ag, wf7 ag] -- XXX , wf8 allgroups]
 
 -- Simple example. Should fail since wf3 is ofc more complex.
 prop_wf21 :: FM -> Property
