@@ -559,7 +559,7 @@ allPlans = [("flatPlan",flatPlan 5 )
           -- , ("smallFlatPlan", smallFlatPlan 3)
            , ("balancedPlan1",balancedPlan1 2 )
            , ("linearHierarchyPlan", linearHierarchyPlan 5)
-           , ("gridHierarchyPlan", gridHierarchyPlan 2) -- XXX: 3,4 fails
+           , ("gridHierarchyPlan", gridHierarchyPlan 5) -- XXX: 3,4 fails
           , ("balancedPlan", balancedPlan 5)
             ]
 
@@ -590,7 +590,7 @@ crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "repor
 
 do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
-                     bgroup "Maude" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
+                     bgroup "Maude wo/checks" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans]
                      ]
