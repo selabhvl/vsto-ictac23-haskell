@@ -63,11 +63,20 @@ test_ifm1 = IntervalBasedFeatureModel root_feature (M.fromList [("Test1", im [(V
               (im [])
           )])
                                                    (M.fromList [])
+singleAddGroupOp :: FM -> UpdateOperation
+singleAddGroupOp im = AddOperation (Validity (TP 0) Forever) 
+                        (AddGroup (GroupID "Test_Group") 
+                                  Or root_feature)
+
 
 fold_and_test :: FM -> [UpdateOperation] -> (Int, FM)
 fold_and_test im = foldl (\(i,m) op -> let step = mkOp m op in if prop_wf False step then (i+1, step) 
                                                                   else error ("Op " ++ (show i) ++ "/" ++ show op ++ " produced a broken model.\n"++ show (prop_wf True step))) (1, im)
 
+-- NB: the Maude-approach does not really deal with timepoints. All timepoints ("at N do op1, op1, ...") must be totally ordered.
+-- Essentially, all operations are executed after a linearizitation. Inserting an update somewhere may thus require relabbeling of (integeger) timepoints to make room "in between".
+-- We streamline between both approaches by considering all actions in a plan totally ordered, with an interval of [0,∞).
+-- We can then reuse the datatypes here, where the Maude-version simply ignores the intervals.
  
 
 flatPlan :: Int -> FeatureID -> [UpdateOperation]
@@ -508,8 +517,8 @@ measure ds_plan check_op apply_op createFM operations = do
     return ()
   t_exe <- getCPUTime
   -- for FMEP, we will use a NOP here, Maude will validate the resulting plan:
-  let check_result = check_op result
-  print check_result
+  check_result <- check_op result `deepseq` return ()
+  -- print check_result
   end <- getCPUTime
   let diff = (fromIntegral (end - start)) / (10^12)
   let diff_plan = (fromIntegral (t_exe - start)) / (10^12)
@@ -522,21 +531,29 @@ measure ds_plan check_op apply_op createFM operations = do
 -- mrlp_experiment :: IO ()
 mrlp_experiment checkAll measure plan =
   -- Use `False` in production since a) we need the time, and b) should only plug in plans for which we know the result.
-  measure True (prop_wf False) (if checkAll then (\x y -> (\m -> if prop_wf True m then m else undefined) $ mkOp x y) else mkOp) hm tailPlan
+  measure True (prop_wf False) (if checkAll then (\x y -> (\m -> if prop_wf True m then m else undefined) $ mkOp x y) else mkOp) im (plan rfid)
   where
     im@(FM rfid _) = test_fm1
-    hm = foldl mkOp im headPlan
-    (headPlan, tailPlan) = splitAt 3 (plan rfid)
 
 -- mrlp_experiment_tcs :: IO ()
 mrlp_experiment_tcs measure plan =
-  measure True (not . fst) (foldOp) (False, hm) tailPlan
+  measure True (not . fst) (foldOp) (False, im) (plan root_feature)
   where
     im = test_ifm1
-    hm = foldl (flip Apply.apply) im headPlan
-    (headPlan, tailPlan) = splitAt 3 (plan root_feature)
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
 
+-- Experiments that simulate executing a plan, and adding an item in the front.
+-- For Maude, we need to recheck the entire plan. For TCS, we only apply the additional step with its interval.
+add_one_in_front_maude_1 measure plan = measure True (const True) mkOp test_fm1 plan
+add_one_in_front_maude_2 measure plan = measure True (const True) mkOp test_fm1 (singleAddGroupOp test_fm1 : plan)
+
+add_one_in_front_maude measure plan = measure True (\fm -> rnf fm `seq` add_one_in_front_maude_2 (\_ _ -> foldl') plan) mkOp test_fm1 plan
+
+add_one_in_front_tcs measure plan = measure True (\ibfm -> (validateAndApply (singleAddGroupOp test_fm1) $ snd ibfm)) (foldOp) (False, test_ifm1) plan
+  where
+    -- im@(FM rfid _) = test_fm1
+    foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
+      
 smallestRenamePlan :: FeatureID -> [UpdateOperation]
 smallestRenamePlan rfid = [ ChangeOperation (TP 0) (ChangeFeatureName rfid "RenamedFeature1") ]
 
@@ -551,16 +568,16 @@ smallFlatPlan l rfid =
   )
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
-allPlans = [("flatPlan",flatPlan 5 )
-            , ("shallowHierarchyPlan",shallowHierarchyPlan 5)
+allPlans = [("flatPlan",flatPlan 1)
+            , ("shallowHierarchyPlan",shallowHierarchyPlan 1)
             , ("hierarchyPlan", hierarchyPlan 1)
            -- , ("smallestRenamePlan", smallestRenamePlan)
          --  , ("smallFlatPlan2", smallFlatPlan 2)
           -- , ("smallFlatPlan", smallFlatPlan 3)
-           , ("balancedPlan1",balancedPlan1 2 )
-           , ("linearHierarchyPlan", linearHierarchyPlan 5)
-           , ("gridHierarchyPlan", gridHierarchyPlan 5) -- XXX: 3,4 fails
-          , ("balancedPlan", balancedPlan 5)
+           , ("balancedPlan1",balancedPlan1 1)
+           , ("linearHierarchyPlan", linearHierarchyPlan 1)
+           , ("gridHierarchyPlan", gridHierarchyPlan 1) -- XXX: 3,4 fails
+          , ("balancedPlan", balancedPlan 1)
             ]
 
 all_experiments :: IO ()
@@ -592,7 +609,11 @@ do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
                      bgroup "Maude wo/checks" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
-                     bgroup "FMEP " [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans]
+                     bgroup "FMEP" [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans],
+                     -- we use as a variation here `nf` and shared expanded plans.
+                     bgroup "SingleOp" $ concat [[bench ("M_baseline_" ++ n) (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
+                                                  bench ("M_extra_" ++ n) (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
+                                                  bench ("TCS_" ++ n) (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature]
                      ]
 
 -- Debugging:

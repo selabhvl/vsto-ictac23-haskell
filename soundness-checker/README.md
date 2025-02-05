@@ -29,13 +29,15 @@ stack run
 This outputs an example interval-based feature model.
 
 ```sh
-stack run tcs-csv output.csv True 3
+stack run tcs-csv output.csv False 3
 ```
-Generates performance data as CSV. True/False controls whether Maude should check each step of the plan. Integer is number of iterations to smooth out execution time.
+Generates performance data as CSV. True/False controls whether Maude should check each step of the plan. Integer is number of iterations to smooth out execution time,
+in case you don't want to use Criterion below:
 
 ```sh
 stack run tcs-criterion
 stack run tcs-criterion -- "FMEP" "Maude wo"
+stack run tcs-criterion -- --match glob "SingleOp/*linear*"
 ```
 
 Generate [`criterion`](https://hackage.haskell.org/package/criterion) performance report (all/filtered by matching benchmarks).
