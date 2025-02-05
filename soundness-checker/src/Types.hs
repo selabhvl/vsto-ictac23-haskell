@@ -155,7 +155,7 @@ data ValidationError
   | NodeNotExists
   | HasChildren Validity
   | CreatesCycle
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, NFData)
 
 makePrisms ''GroupType
 makePrisms ''TimePoint
