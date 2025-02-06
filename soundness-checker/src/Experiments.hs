@@ -551,7 +551,6 @@ add_one_in_front_maude measure plan = measure True (\fm -> rnf fm `seq` add_one_
 
 add_one_in_front_tcs measure plan = measure True (\ibfm -> (validateAndApply (singleAddGroupOp test_fm1) $ snd ibfm)) (foldOp) (False, test_ifm1) plan
   where
-    -- im@(FM rfid _) = test_fm1
     foldOp (aborted, m) op = if aborted then (aborted, m) else let result = validateAndApply op m in if isRight result then (False, fromRight m result) else (True, m)
       
 smallestRenamePlan :: FeatureID -> [UpdateOperation]
@@ -613,7 +612,8 @@ do_the_experiment = defaultMainWith crit_config [
                      -- we use as a variation here `nf` and shared expanded plans.
                      bgroup "SingleOp" $ concat [[bench ("M_baseline_" ++ n) (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
                                                   bench ("M_extra_" ++ n) (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
-                                                  bench ("TCS_" ++ n) (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature]
+                                                  bench ("TCS_baseline_" ++ n) (nf (add_one_in_front_tcs (\_ _ -> foldl')) p ),
+                                                  bench ("TCS_extra_" ++ n) (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature]
                      ]
 
 -- Debugging:
