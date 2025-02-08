@@ -1,23 +1,20 @@
-# Modular Soundness Checking for Feature Model Evolution Plans
+# "Modular Soundness Checking for Feature Model Evolution Plans"
 
-A master thesis by Ida Sandberg Motzfeldt
+Authors:
+Crystal Chang Din, Charaf Eddine Dridi, Ida Sandberg Motzfeldt, Violet Ka I Pun, Volker Stolz, Ingrid Chieh Yu
 
-## Overview
+This is the artefact for the revised version of our [ICTAC'23 paper](https://doi.org/10.1007/978-3-031-47963-2_25):
 
-This repository contains my thesis and the source code relevant to it.
+Ida Sandberg Motzfeldt, Ingrid Chieh Yu, Crystal Chang Din, Violet Ka I Pun, Volker Stolz:
+"Modular Soundness Checking of Feature Model Evolution Plans". ICTAC 2023: 417-437
 
-- [The thesis](https://github.com/idamotz/Master/blob/master/thesis/thesis.pdf)
-- [A soundness checker written in Haskell](https://github.com/idamotz/Master/tree/master/soundness-checker)
+Based on/forked from [the master thesis by Ida Sandberg Motzfeldt](https://github.com/idamotz/Master/).
 
 ## Abstract
 
-A software product line (SPL) is a family of closely related software systems which capitalizes on the reusability and variability of the software products.
-An SPL can be modelled using a feature model, a tree-like structure from which all the configurations of the SPL can be derived.
-Large projects such as an SPL require long-term planning, and plans for SPLs may also be defined in terms of feature models, called feature model evolution plans (FMEP). An FMEP gives information about what a feature model looks like at each stage of the plan.
+Feature model evolution plans (FMEPs) describe how feature models for software product lines (SPLs) evolve over time. While different feature models can exist for different points in time over the lifetime of the product line, an FMEP describes how to compute a feature model for a given time point. SPLs capitalize on the variability and reusability of the software through combining optional and mandatory features. As business requirements change over time, FMEPs should support intermediate update. A plan hence contains updates to an initial model by adding, deleting, moving or changing elements at different points in time, in line with the evolving business requirements on the SPL, potentially affecting feature models that should be derived in the future from the plan.
 
-As business requirements often change, FMEPs should support intermediate change. Such changes may cause paradoxes in an FMEP,  e.g. a node left without a parent, making the plan impossible to realise. The complex nature of FMEPs makes detecting paradoxes by hand impractical. Current tools exist to validate FMEPs, but require analysis of the entire plan even when a modification affects only small parts of it. For larger FMEPs, this is inefficient. Thus, there is a need for a method which detects such paradoxes in a more efficient way.
+A recurring challenge in maintaining FMEPs is that updates may lead to inconsistent intermediate feature models, most notably so-called paradoxes. A paradox may not materialise at the first point in time an update on the plan is performed to obtain a particular feature model, but may only in combination with a later modification prescribed by the plan create a structurally invalid model. Correspondingly, a single modification to a plan may require multiple checks over the liftetime of the affected elements to rule out paradoxes.
 
-In this thesis, we present a representation for FMEPs, called an interval-based feature model (IBFM). This representation enables local validation, by which we mean validating only the parts of the plan that are affected by the change. We define operations for updating an IBFM, and methods for detecting paradoxes resulting from an operation. Moreover, we give a proof of correctness for the method and an implementation as proof of concept.
-
-Using these methods, it is possible to create an efficient verification tool for modification of FMEPs. This may be used as basis for a productive SPL planning tool.
+Current approaches require the analysis from the point in time an update is applied to an FMEP throughout the entire lifetime of the plan. Based on our initial work [ICTAC'23], we define a so-called interval-based feature model (IBFM) to represent FMEPs, with a precise definition of spatial and temporal scopes that narrow the time interval and the sub-models that an update can affect. We propose a rule system for updating IBFMs, and also prove the soundness of the proposed rules and show their modularity, i.e., that each rule operates strictly
 
