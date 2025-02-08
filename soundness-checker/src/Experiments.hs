@@ -1,12 +1,12 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
+-- Authors: Volker Stolz, Charaf Eddine Dridi @ HVL
+
 module Experiments where
-import System.IO (writeFile)
 import Control.DeepSeq
 import Control.Monad (foldM, unless)
 import Data.Either
 import Data.Foldable (foldl')
-import Data.List.HT (takeUntil)
 import Data.Maybe
 import Data.Tuple.Utils
 import qualified Data.IntervalMap.Generic.Strict as IM
@@ -16,10 +16,9 @@ import System.IO
 import Text.Printf
 
 import qualified Types as T (Feature(..), Group(..))
-import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel, IntervalBasedFeatureModel(..))
+import Types (Feature, FeatureModel(..), FeatureID(..), Group, GroupID(..), FeatureType(..), GroupType(..), FeatureModel, IntervalBasedFeatureModel(..))
 import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..), ValidityMap, FeatureValidity(..))
-import System.IO (readFile)
--- Or import Maude2 here:
+-- Import Maude/Maude2 here:
 import Maude2 (FM(..), Feature(..), FT(..), Group(..), Feature(F), _name, _parentID, _featureType, _childGroups, mkOp, prop_wf, childFeaturesToAscList, childGroupsToAscList)
 
 import qualified Apply
@@ -30,7 +29,6 @@ import TreeSequence (treeAt)
 
 import Test.HUnit
 import Test.QuickCheck
-import Test.QuickCheck.Monadic
 
 import Criterion.Main
 import Criterion.Types hiding (measure)
@@ -606,10 +604,11 @@ crit_config = defaultConfig { csvFile = Just "out.csv", reportFile = Just "repor
 
 do_the_experiment :: IO ()
 do_the_experiment = defaultMainWith crit_config [
-                     bgroup "Maude wo/checks" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
-                     bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
-                     bgroup "FMEP" [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans],
-                     -- we use as a variation here `nf` and shared expanded plans.
+                     -- Used in testing only:
+                     -- bgroup "Maude wo/checks" [bench n (whnf (mrlp_experiment False (\_ _ -> foldl')) p) | (n,p) <- allPlans],
+                     -- bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
+                     -- bgroup "FMEP" [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans],
+                     -- Experitment for TCS-paper; we use as a variation here `nf` and shared expanded plans.
                      bgroup "SingleOp" $ concat [[bench ("M_baseline_" ++ n) (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
                                                   bench ("M_extra_" ++ n) (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
                                                   bench ("TCS_baseline_" ++ n) (nf (add_one_in_front_tcs (\_ _ -> foldl')) p ),
