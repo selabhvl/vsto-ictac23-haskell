@@ -380,7 +380,7 @@ linearPlan scaleFactor rfid =
 gridPlan :: Int -> FeatureID -> [UpdateOperation]
 gridPlan scaleFactor rfid =
   let 
-      totalGroups = 150  `div` scaleFactor       
+      totalGroups = 100  `div` scaleFactor
       featuresPerGroup = 100   `div` scaleFactor 
       removedFeatures = 200   `div` scaleFactor 
       movedFeatures = 300     `div` scaleFactor
@@ -572,8 +572,8 @@ allPlans = [("flatPlan",flatPlan 1)
          --  , ("smallFlatPlan2", smallFlatPlan 2)
           -- , ("smallFlatPlan", smallFlatPlan 3)
            , ("linearPlan", linearPlan 1)
-           , ("balancedPlan1",balancedPlan1 1)
-          , ("gridPlan", gridPlan 5) -- XXX: 3,4 fails
+           , ("balancedPlan",balancedPlan1 1)
+          , ("gridPlan", gridPlan 1) -- XXX: 3,4 fails
           --, ("balancedPlan", balancedPlan 5)
             ]
 
@@ -609,11 +609,11 @@ do_the_experiment = defaultMainWith crit_config [
                      -- bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      -- bgroup "FMEP" [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      -- Experitment for TCS-paper; we use as a variation here `nf` and shared expanded plans.
-                     bgroup "SingleOp" $ concat [[bench ("M_baseline_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
-                                                  bench ("M_extra_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
-                                                  bench ("TCS_baseline_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_tcs (\_ _ -> foldl')) p ),
-                                                  bench ("TCS_extra_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature]
-                     ]
+                     bgroup (n ++ "("++ (show $ length p)++")") [bench ("L_baseline") (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
+                                                  bench ("L_extra") (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
+                                                  bench ("IBFM_baseline") (nf (add_one_in_front_tcs (\_ _ -> foldl')) p ),
+                                                  bench ("IBFM_extra") (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature
+                    ]
 
 -- Debugging:
 --
