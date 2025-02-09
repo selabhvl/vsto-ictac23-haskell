@@ -609,10 +609,10 @@ do_the_experiment = defaultMainWith crit_config [
                      -- bgroup "Maude w/checks" [bench n (whnf (mrlp_experiment True (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      -- bgroup "FMEP" [bench n (whnf (mrlp_experiment_tcs (\_ _ -> foldl')) p) | (n,p) <- allPlans],
                      -- Experitment for TCS-paper; we use as a variation here `nf` and shared expanded plans.
-                     bgroup "SingleOp" $ concat [[bench ("M_baseline_" ++ n) (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
-                                                  bench ("M_extra_" ++ n) (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
-                                                  bench ("TCS_baseline_" ++ n) (nf (add_one_in_front_tcs (\_ _ -> foldl')) p ),
-                                                  bench ("TCS_extra_" ++ n) (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature]
+                     bgroup "SingleOp" $ concat [[bench ("M_baseline_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_maude_1 (\_ _ -> foldl')) p),
+                                                  bench ("M_extra_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_maude (\_ extra_op x y z -> extra_op $ foldl' x y z)) p),
+                                                  bench ("TCS_baseline_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_tcs (\_ _ -> foldl')) p ),
+                                                  bench ("TCS_extra_" ++ n ++ " ("++(show $ length p)++")") (nf (add_one_in_front_tcs (\_ extra_op x y z-> extra_op $ foldl' x y z)) p )] | (n,p') <- allPlans, let p = p' root_feature]
                      ]
 
 -- Debugging:
