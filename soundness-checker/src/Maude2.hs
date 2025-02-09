@@ -9,10 +9,7 @@
 module Maude2 where
 
 import GHC.Generics (Generic)
-import Control.DeepSeq (NFData)
 import Control.DeepSeq
-import System.CPUTime
-import Text.Printf
 
 import Control.Lens
 import Control.Monad
@@ -24,10 +21,8 @@ import qualified Data.Set as S
 import Data.Tuple.Utils
 import Test.QuickCheck
 import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
-import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
-import Types (IntervalBasedFeatureModel)
+import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
 
-import qualified Apply
 import Helpers (noDupes, isExactlyOne, isGtOne)
 
 data Feature = F

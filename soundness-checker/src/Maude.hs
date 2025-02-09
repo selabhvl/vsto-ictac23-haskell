@@ -20,7 +20,7 @@ import Data.Maybe
 import Data.Tuple.Utils
 import Test.QuickCheck
 import Types (FeatureID(..), GroupID(..), FeatureType(..), GroupType(..), Name, FeatureModel)
-import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..), Validity(..))
+import Types (AddOperation(..), ChangeOperation(..), UpdateOperation(..), TimePoint(..))
 
 import Helpers (noDupes, isExactlyOne, isGtOne)
 
