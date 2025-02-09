@@ -573,7 +573,7 @@ allPlans = [("flatPlan",flatPlan 1)
           -- , ("smallFlatPlan", smallFlatPlan 3)
            , ("linearPlan", linearPlan 1)
            , ("balancedPlan1",balancedPlan1 1)
-          , ("gridPlan", gridPlan 2) -- XXX: 3,4 fails
+          , ("gridPlan", gridPlan 5) -- XXX: 3,4 fails
           --, ("balancedPlan", balancedPlan 5)
             ]
 
