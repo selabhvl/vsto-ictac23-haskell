@@ -135,8 +135,8 @@ flatPlan scaleFactor rfid =
   | i <- [2,4..readdFeatures] ] 
 
 
-shallowHierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
-shallowHierarchyPlan scaleFactor rfid =
+shallowPlan :: Int -> FeatureID -> [UpdateOperation]
+shallowPlan scaleFactor rfid =
   let 
     totalFeatures = 6000 `div` scaleFactor
     totalGroups = 20
@@ -218,8 +218,8 @@ hierarchyPlan scaleFactor rfid =
 
 
 
-balancedPlan1 :: Int -> FeatureID -> [UpdateOperation]
-balancedPlan1 scaleFactor rfid =
+balancedPlan :: Int -> FeatureID -> [UpdateOperation]
+balancedPlan scaleFactor rfid =
   let
     totalRootGroups = 20 `div` scaleFactor
     totalRootFeatures = 500 `div` scaleFactor
@@ -317,8 +317,8 @@ balancedPlan1 scaleFactor rfid =
     readdOperations
 
 
-linearHierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
-linearHierarchyPlan scaleFactor rfid =
+linearPlan :: Int -> FeatureID -> [UpdateOperation]
+linearPlan scaleFactor rfid =
   let 
       totalRootGroups = 20 `div` scaleFactor
       totalFeatures = 1500 `div` scaleFactor
@@ -377,10 +377,10 @@ linearHierarchyPlan scaleFactor rfid =
 
 
 
-gridHierarchyPlan :: Int -> FeatureID -> [UpdateOperation]
-gridHierarchyPlan scaleFactor rfid =
+gridPlan :: Int -> FeatureID -> [UpdateOperation]
+gridPlan scaleFactor rfid =
   let 
-      totalGroups = 100  `div` scaleFactor       
+      totalGroups = 150  `div` scaleFactor       
       featuresPerGroup = 100   `div` scaleFactor 
       removedFeatures = 200   `div` scaleFactor 
       movedFeatures = 300     `div` scaleFactor
@@ -458,8 +458,8 @@ gridHierarchyPlan scaleFactor rfid =
     readdOperations
 
 
-balancedPlan :: Int -> FeatureID -> [UpdateOperation]
-balancedPlan scaleFactor rfid =
+balancedPlan1 :: Int -> FeatureID -> [UpdateOperation]
+balancedPlan1 scaleFactor rfid =
   let 
       totalFeatures = 6000  `div` scaleFactor
       totalGroups = 100     `div` scaleFactor
@@ -566,15 +566,15 @@ smallFlatPlan l rfid =
 
 allPlans :: [(String, FeatureID -> [UpdateOperation])]
 allPlans = [("flatPlan",flatPlan 1)
-            , ("shallowHierarchyPlan",shallowHierarchyPlan 1)
-            , ("hierarchyPlan", hierarchyPlan 1)
+            , ("shallowPlan",shallowPlan 1)
+            --, ("hierarchyPlan", hierarchyPlan 1)
            -- , ("smallestRenamePlan", smallestRenamePlan)
          --  , ("smallFlatPlan2", smallFlatPlan 2)
           -- , ("smallFlatPlan", smallFlatPlan 3)
+           , ("linearPlan", linearPlan 1)
            , ("balancedPlan1",balancedPlan1 1)
-           , ("linearHierarchyPlan", linearHierarchyPlan 1)
-           , ("gridHierarchyPlan", gridHierarchyPlan 1) -- XXX: 3,4 fails
-          , ("balancedPlan", balancedPlan 1)
+          , ("gridPlan", gridPlan 2) -- XXX: 3,4 fails
+          --, ("balancedPlan", balancedPlan 5)
             ]
 
 all_experiments :: IO ()
@@ -620,7 +620,7 @@ do_the_experiment = defaultMainWith crit_config [
 test_fix_fmep_linearplan_working = fix_fmep_linearplan 3001
 test_fix_fmep_linearplan_broken = fix_fmep_linearplan 3002
 
-fix_fmep_linearplan idx = foldM foldOp (0, test_ifm1) $ take idx $ linearHierarchyPlan 1 root_feature
+fix_fmep_linearplan idx = foldM foldOp (0, test_ifm1) $ take idx $ linearPlan 1 root_feature
   where
     foldOp acc@(i, m) op = let result = validateAndApply op m in if isRight result then Right (i+1, fromRight m result) else Left (i+1, m)
 
@@ -715,8 +715,8 @@ bisectionGpt pred sortedList = go 0 (length sortedList - 1)
                         then go low (mid - 1)
                         else go (mid + 1) high
 
--- to write models ghci> write_models_to_files linearHierarchyPlan 3000
--- ghci> write_models_to_files linearHierarchyPlan 3001
+-- to write models ghci> write_models_to_files linearPlan 3000
+-- ghci> write_models_to_files linearPlan 3001
 write_models_to_files :: (FeatureID -> [UpdateOperation]) -> Int -> IO ()
 write_models_to_files plan idx = do
   let models = make_models $ plan root_feature
@@ -748,7 +748,7 @@ save_models n = do
     withFile "maude.txt" WriteMode (\h -> do hPutStrLn h (show (fst models)))
     withFile "tcs.txt" WriteMode (\h -> do hPutStrLn h (show (snd models)))
   where
-     models = check_equal_models (linearHierarchyPlan 10) n
+     models = check_equal_models (linearPlan 10) n
 
 
 getIds :: Types.Feature -> ([FeatureID], [GroupID])
@@ -766,7 +766,7 @@ getIdsG g = (fids, (T._groupID g) : gids)
 -- Depends a lot on having QuickCheck pick enough distinct random pairs, possibly not the best use of our cycles...
 -- We pass in some pre-computed args (most importantly `m`) to avoid re-computing this in the test.
 --
--- ghci> Test.QuickCheck.quickCheck $ prop_moveFeature linearHierarchyPlan 
+-- ghci> Test.QuickCheck.quickCheck $ prop_moveFeature linearPlan 
 -- +++ OK, passed 100 tests; 249 discarded:
 -- 51% no cycle
 -- 49% cycle
@@ -784,3 +784,13 @@ prop_move (ancOp, mkOp, lrOp) plan m (NonNegative xf, NonNegative xg) = xf < len
 
 prop_moveFeature plan = withDiscardRatio 50 $ prop_move (Right . snd, MoveFeature, Left . fst) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
 prop_moveGroup plan = withDiscardRatio 50 $ prop_move (Left . fst, flip MoveGroup, Right . snd) plan (snd3 . fromRight undefined . make_tcs_models $ plan root_feature)
+all_experiments_count_operations :: IO ()
+all_experiments_count_operations = do
+  putStrLn "Starting experiments and counting operations for all plans..."
+  mapM_ runExperiment allPlans
+  where
+    runExperiment (name, plan) = do
+      let operations = plan (FeatureID "root")  -- Generate the operations using a test FeatureID
+      putStrLn $ "Plan: " ++ name ++ " has " ++ show (length operations) ++ " operations."
+      _ <- measure True (prop_wf False) mkOp test_fm1 operations
+      return ()
